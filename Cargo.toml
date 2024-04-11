@@ -1,0 +1,64 @@
+[package]
+name = "voxel_game"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bevy = { version = "0.13", features = [ "serialize" ] }
+bitmask = "0.5"
+itertools = "0.12"
+rand = "0.8"
+serde = { version = "1", features = [ "derive" ] }
+ron = "0.8"
+bincode = "1"
+noise = "0.9"
+bevy-inspector-egui = "0.23"
+
+[features]
+default = [ "dynamic_linking" ]
+dynamic_linking = [ "bevy/dynamic_linking" ]
+
+
+# faster building times
+
+# Enable a small amount of optimization in debug mode
+[profile.dev]
+opt-level = 1
+
+# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+[profile.dev.package."*"]
+opt-level = 3
+
+
+# release
+
+[profile.release]
+opt-level = "z"
+strip = "symbols"
+
+[profile.release.package."*"]
+opt-level = "z"
+strip = "symbols"
+
+
+# android
+
+# [lib]
+# name = "voxel_game"
+# crate-type = ["cdylib"]
+
+# [package.metadata.android]
+# package = "org.bluesheep3.voxel_game"
+# apk_name = "voxel_game"
+# assets = "assets"
+# resources = "assets/android-res"
+# build_targets = ["aarch64-linux-android", "armv7-linux-androideabi"]
+
+# [package.metadata.android.sdk]
+# target_sdk_version = 31
+
+# [package.metadata.android.application]
+# icon = "@mipmap/ic_launcher"
+# label = "Voxel Game"

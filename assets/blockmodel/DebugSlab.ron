@@ -1,0 +1,17 @@
+(
+	should_cull: false,
+	cuboids: [
+		(
+			min: ( 0.0, 0.0, 0.0 ),
+			max: ( 1.0, 0.5, 1.0 ),
+			sides: ((
+				"StoneSlabBottomSide",
+				"StoneSlabBottomSide",
+				"DebugBlockY+",
+				"DebugBlockY-",
+				"StoneSlabBottomSide",
+				"StoneSlabBottomSide",
+			)),
+		),
+	],
+)
