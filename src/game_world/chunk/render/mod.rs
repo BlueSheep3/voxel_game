@@ -26,6 +26,8 @@ impl Plugin for RenderPlugin {
 			.insert_resource(ChunkMeshEntities::default())
 			.insert_resource(MeshTasks::default())
 			.add_systems(OnEnter(LoadingState::Done), setup_global_material)
+			.add_systems(OnEnter(GlobalState::InWorld), init)
+			.add_systems(OnExit(GlobalState::InWorld), cleanup)
 			.add_systems(
 				Update,
 				(
@@ -44,6 +46,10 @@ impl Plugin for RenderPlugin {
 
 #[derive(Component)]
 struct ChunkMesh;
+
+// exaclty one ChunkMeshParent should exist while GlobalState::InWorld, otherwise zero
+#[derive(Component)]
+struct ChunkMeshParent;
 
 #[derive(Resource, Default)]
 struct QueuedChunkRedraws {
@@ -89,6 +95,20 @@ fn setup_global_material(
 	info!("global material inserted");
 }
 
+fn init(mut commands: Commands) {
+	commands.spawn((
+		SpatialBundle::default(),
+		ChunkMeshParent,
+		Name::new("ChunkMeshParent"),
+	));
+}
+
+fn cleanup(mut commands: Commands, chunk_mesh_parent: Query<Entity, With<ChunkMeshParent>>) {
+	if let Ok(chunk_mesh_parent) = chunk_mesh_parent.get_single() {
+		commands.entity(chunk_mesh_parent).despawn_recursive();
+	}
+}
+
 /// queues the chunks that are currently being loaded into the render distance
 fn queue_loading_chunks(
 	mut chunk_loading_event: EventReader<ChunkLoadedEvent>,
@@ -117,9 +137,15 @@ fn despawn_chunk_on_unload(
 	mut unloaded_event: EventReader<ChunkUnloadedEvent>,
 	mut commands: Commands,
 	mut mesh_entites: ResMut<ChunkMeshEntities>,
+	chunk_mesh_parent: Query<Entity, With<ChunkMeshParent>>,
 ) {
+	let chunk_mesh_parent = chunk_mesh_parent.single();
 	for event in unloaded_event.read() {
 		if let Some(entity) = mesh_entites.entities.remove(&event.pos) {
+			// currently a child has to manually removed from the parent
+			commands
+				.entity(chunk_mesh_parent)
+				.remove_children(&[entity]);
 			commands.entity(entity).despawn();
 		}
 	}
@@ -168,7 +194,9 @@ fn spawn_chunk_meshes_from_tasks(
 	global_material: Res<GlobalMaterial>,
 	mut mesh_entites: ResMut<ChunkMeshEntities>,
 	mut mesh_tasks: ResMut<MeshTasks>,
+	chunk_mesh_parent: Query<Entity, With<ChunkMeshParent>>,
 ) {
+	let chunk_mesh_parent = chunk_mesh_parent.single();
 	let keys = mesh_tasks.tasks.keys().cloned().collect::<Vec<_>>();
 	for chunk_pos in keys {
 		let Some(task) = mesh_tasks.tasks.get(&chunk_pos) else {
@@ -186,8 +214,12 @@ fn spawn_chunk_meshes_from_tasks(
 		let mesh = block_on(task);
 		let cube_mesh_handle = meshes.add(mesh);
 
+		// PERF it would be more efficient to update the entity instead of creating a new one
 		if mesh_entites.entities.contains_key(&chunk_pos) {
 			let entity = mesh_entites.entities.remove(&chunk_pos).unwrap();
+			commands
+				.entity(chunk_mesh_parent)
+				.remove_children(&[entity]);
 			commands.entity(entity).despawn();
 		}
 
@@ -203,6 +235,7 @@ fn spawn_chunk_meshes_from_tasks(
 				Name::new(format!("Chunk Mesh at {}", chunk_pos)),
 			))
 			.id();
+		commands.entity(chunk_mesh_parent).add_child(entity);
 
 		mesh_entites.entities.insert(chunk_pos, entity);
 	}

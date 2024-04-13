@@ -8,6 +8,7 @@ use crate::{
 	GlobalState,
 };
 use bevy::prelude::*;
+use float_next_after::NextAfter;
 
 pub struct MoveAndSlidePlugin;
 
@@ -37,7 +38,6 @@ fn move_and_slide(
 	let dt = time.delta_seconds();
 	for (mut trans, mut vel, col, mut on_ground) in &mut query {
 		let local_hitbox = col.into_cuboid();
-		let hitbox = local_hitbox + trans.translation;
 
 		if let Some(ref mut on_ground) = on_ground {
 			on_ground.0 = false;
@@ -50,18 +50,22 @@ fn move_and_slide(
 
 		let mut t = dt;
 		while t > 0. {
+			let hitbox = local_hitbox + trans.translation;
+
 			// get the relevant cuboids
 			let positions = get_all_block_pos_for_cuboid_cast(hitbox, v * t);
 			let block_collisions = get_block_collisions(positions, &game_world);
 
-			// find minimum movement to touch block face
-			let min_movement = find_min_movement(&block_collisions, hitbox, v, dt);
-			let Some((hit_t, face)) = min_movement else {
+			let block_hit = earliest_block_hit(&block_collisions, hitbox, v, dt);
+			let Some((hit_t, face)) = block_hit else {
+				// since there are no more collisions in a straight line,
+				// we can just move linearly for the rest of t
+				trans.translation += v * t;
 				break;
 			};
 
 			if let Some(ref mut on_ground) = on_ground {
-				if face == Face::Down {
+				if face == Face::Up {
 					on_ground.0 = true;
 				}
 			}
@@ -70,21 +74,51 @@ fn move_and_slide(
 			t -= hit_t;
 			trans.translation += v * hit_t;
 
+			// FIXME moving slightly makes this not 100% precise :(
+			trans.translation = move_slighty_in_direction(trans.translation, face);
+
 			// set velocity to 0 in direction of face
 			let vel_mask = 1. - face.normal().to_vec3().abs();
 			v *= vel_mask;
 			vel.vel *= vel_mask;
 		}
-		// move the remaining time
-		trans.translation += v * t;
 	}
+}
+
+/// Moves a position in the direction of the normal of a face.
+/// Note that this is not necessarily the smallest possible value,
+/// but it will never get rounded away.
+fn move_slighty_in_direction(pos: Vec3, face: Face) -> Vec3 {
+	let normal = face.normal().to_vec3();
+	let after_pos = Vec3::new(
+		if normal.x.abs() < f32::EPSILON {
+			pos.x
+		} else {
+			normal.x.signum() * f32::INFINITY
+		},
+		if normal.y.abs() < f32::EPSILON {
+			pos.y
+		} else {
+			normal.y.signum() * f32::INFINITY
+		},
+		if normal.z.abs() < f32::EPSILON {
+			pos.z
+		} else {
+			normal.z.signum() * f32::INFINITY
+		},
+	);
+	Vec3::new(
+		pos.x.next_after(after_pos.x),
+		pos.y.next_after(after_pos.y),
+		pos.z.next_after(after_pos.z),
+	) + normal * f32::EPSILON
 }
 
 /// Figures out how far a hitbox can be moved with a given velocity until it
 /// hits any block in any direction. Will return `None` if no block is
 /// hit, and `Some((t, f))` if it hits, where `t` is how long the hitbox
-/// has to move to hit a block, and `f` is which face of the hitbox to check.
-fn find_min_movement(
+/// has to move to hit a block, and `f` is the face of the block.
+fn earliest_block_hit(
 	block_collisions: &[Cuboid],
 	hitbox: Cuboid,
 	vel: Vec3,
@@ -110,12 +144,14 @@ fn find_min_movement(
 fn find_plane_intersect(
 	hitbox: Cuboid,
 	block_col: Cuboid,
-	hitbox_face: Face,
+	block_face: Face,
 	vel: Vec3,
 ) -> Option<f32> {
+	let hitbox_face = block_face.opposite();
+
 	macro_rules! faces_intersect {
 		($($face:ident => $axis:ident, $hitbox_side:ident, $block_side:ident,
-		$other_axis:ident, $v_cmp:tt, $b_cmp:tt);* $(;)?) => {
+		$other_plane:ident, $v_cmp:tt, $b_cmp:tt);* $(;)?) => {
 			match hitbox_face { $(
 				Face::$face => {
 					if vel.$axis $v_cmp 0. {
@@ -133,18 +169,18 @@ fn find_plane_intersect(
 					if t < 0. {
 						return None;
 					}
-					let delta = vel.$other_axis() * t;
+					let delta = vel.$other_plane() * t;
 
 					// check whether the planes intersect
-					let corner_min = hitbox.min.$other_axis() + delta;
-					let corner_max = hitbox.max.$other_axis() + delta;
+					let corner_min = hitbox.min.$other_plane() + delta;
+					let corner_max = hitbox.max.$other_plane() + delta;
 					let hitbox_plane = Rect::from_corners(corner_min, corner_max);
 
-					let corner_min = block_col.min.$other_axis();
-					let corner_max = block_col.max.$other_axis();
+					let corner_min = block_col.min.$other_plane();
+					let corner_max = block_col.max.$other_plane();
 					let block_plane = Rect::from_corners(corner_min, corner_max);
 
-					(!hitbox_plane.intersect(block_plane).is_empty()).then_some(t)
+					rects_intersect(hitbox_plane, block_plane).then_some(t)
 				}
 			)* }
 		};
@@ -158,6 +194,14 @@ fn find_plane_intersect(
 		Back    => z, max, min, xy, <=, >;
 		Forward => z, min, max, xy, >=, <;
 	)
+}
+
+fn rects_intersect(a: Rect, b: Rect) -> bool {
+	// if allow_thin {
+	a.min.cmple(b.max).all() && b.min.cmple(a.max).all()
+	// } else {
+	// a.min.cmplt(b.max).all() && b.min.cmplt(a.max).all()
+	// }
 }
 
 // NOTE the current impl does not work with blocks that are larger than 1x1x1

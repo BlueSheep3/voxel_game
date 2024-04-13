@@ -29,21 +29,26 @@ impl Plugin for MovementPlugin {
 #[derive(Resource, Reflect)]
 #[reflect(Resource)]
 struct MovementValues {
+	/// the acceleration on the ground in m/s²
 	move_ground_accel: f32,
+	/// 1 / the amount of seconds it takes to half the velocity due to friction on the ground
 	move_friction: f32,
+	/// the acceleration in the air in m/s²
 	move_air_accel: f32,
+	/// 1 / the amount of seconds it takes to half the velocity due to friction in the air
 	move_drag: f32,
+	/// the upward velocity when jumping
 	jump_strength: f32,
 }
 
 impl Default for MovementValues {
 	fn default() -> Self {
 		Self {
-			move_ground_accel: 12.0,
-			move_friction: 0.3,
-			move_air_accel: 8.0,
-			move_drag: 0.2,
-			jump_strength: 10.0,
+			move_ground_accel: 80.0,
+			move_friction: 16.0,
+			move_air_accel: 40.0,
+			move_drag: 8.0,
+			jump_strength: 7.0,
 		}
 	}
 }
@@ -68,10 +73,10 @@ fn walk(
 	let prev_y = player_vel.vel.y;
 	if on_ground.0 {
 		player_vel.vel += vec * values.move_ground_accel * dt;
-		player_vel.vel *= 1.0 - values.move_friction * dt;
+		player_vel.vel *= (-values.move_friction * dt).exp2();
 	} else {
 		player_vel.vel += vec * values.move_air_accel * dt;
-		player_vel.vel *= 1.0 - values.move_drag * dt;
+		player_vel.vel *= (-values.move_drag * dt).exp2();
 	}
 	player_vel.vel.y = prev_y;
 }

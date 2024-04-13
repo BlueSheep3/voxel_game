@@ -26,6 +26,17 @@ impl Face {
 		}
 	}
 
+	pub fn opposite(self) -> Self {
+		match self {
+			Self::Right => Self::Left,
+			Self::Left => Self::Right,
+			Self::Up => Self::Down,
+			Self::Down => Self::Up,
+			Self::Back => Self::Forward,
+			Self::Forward => Self::Back,
+		}
+	}
+
 	pub fn all() -> Vec<Self> {
 		vec![
 			Self::Right,
