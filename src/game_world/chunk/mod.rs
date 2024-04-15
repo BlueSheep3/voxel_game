@@ -32,10 +32,9 @@ pub struct Chunk {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BlockArray([[[Block; LEN]; LEN]; LEN]);
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct IsLoaded {
-	// NOTE current impls have a lot of overlap, since the IsLoaded
-	// will be more complicated in the future
+	is_simple_loaded: bool,
 	is_visible: bool,
 }
 
@@ -50,14 +49,39 @@ impl BlockArray {
 }
 
 impl IsLoaded {
-	pub const PLAYER_LOADED: Self = Self { is_visible: true };
-	pub const NOT_LOADED: Self = Self { is_visible: false };
+	pub const SIMPLE_LOADED: Self = Self {
+		is_simple_loaded: true,
+		is_visible: false,
+	};
+	pub const NOT_LOADED: Self = Self {
+		is_simple_loaded: false,
+		is_visible: false,
+	};
+	#[allow(dead_code)]
+	pub const VISIBLE: Self = Self {
+		is_simple_loaded: true,
+		is_visible: true,
+	};
 
-	pub fn is_player_loaded(&self) -> bool {
+	// having these methods feels kind of reduntant
+
+	pub fn is_simple_loaded(&self) -> bool {
+		self.is_simple_loaded
+	}
+
+	pub fn set_simple_loaded(&mut self, value: bool) {
+		self.is_simple_loaded = value;
+		// if a chunk isn't loaded at all it should also be invisible
+		if !value {
+			self.is_visible = false;
+		}
+	}
+
+	pub fn is_visible(&self) -> bool {
 		self.is_visible
 	}
 
-	pub fn set_player_loaded(&mut self, value: bool) {
+	pub fn set_visible(&mut self, value: bool) {
 		self.is_visible = value;
 	}
 }

@@ -18,6 +18,7 @@ impl Plugin for InputPlugin {
 		))
 		.insert_resource(WalkInput::default())
 		.insert_resource(RotateInput::default())
+		.insert_resource(ScrollInput::default())
 		.insert_resource(JumpInput::default())
 		.insert_resource(CrouchInput::default())
 		.insert_resource(AttackInput::default())
@@ -65,6 +66,17 @@ pub struct RotateInput {
 	yaw: f32,
 }
 
+#[derive(Resource, Debug, Clone, Copy, Default)]
+pub struct ScrollInput {
+	delta: f32,
+}
+
+impl ScrollInput {
+	pub fn delta(&self) -> f32 {
+		self.delta
+	}
+}
+
 macro_rules! single_button {
 	($name:ident, $doc_text:expr) => {
 		#[derive(Resource, Debug, Clone, Copy, Default)]
@@ -87,6 +99,7 @@ single_button! { InteractInput, "interact" }
 fn cleanup_input_resources(
 	mut walk_input: ResMut<WalkInput>,
 	mut rotate_input: ResMut<RotateInput>,
+	mut scroll_input: ResMut<ScrollInput>,
 	mut jump_input: ResMut<JumpInput>,
 	mut crouch_input: ResMut<CrouchInput>,
 	mut attack_input: ResMut<AttackInput>,
@@ -94,6 +107,7 @@ fn cleanup_input_resources(
 ) {
 	*walk_input = WalkInput::default();
 	*rotate_input = RotateInput::default();
+	*scroll_input = ScrollInput::default();
 	*jump_input = JumpInput::default();
 	*crouch_input = CrouchInput::default();
 	*attack_input = AttackInput::default();

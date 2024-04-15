@@ -46,9 +46,7 @@ fn break_block(
 	if let Some(hit) = send_out_ray(ray, &game_world) {
 		if let Some(block) = game_world.get_block_at_mut(hit.block_pos) {
 			*block = Air::BLOCK;
-			chunk_updates.send(ChunkUpdateEvent {
-				chunk_pos: hit.block_pos.to_chunk_pos(),
-			});
+			send_block_update(hit.block_pos, &mut chunk_updates);
 		}
 	}
 
@@ -94,9 +92,7 @@ fn place_block(
 				return;
 			}
 			*block = current_block.block;
-			chunk_updates.send(ChunkUpdateEvent {
-				chunk_pos: block_pos.to_chunk_pos(),
-			});
+			send_block_update(hit.block_pos, &mut chunk_updates);
 		}
 	}
 }
@@ -119,5 +115,21 @@ fn select_current_block(input: Res<ButtonInput<KeyCode>>, mut current_block: Res
 	}
 	if input.just_pressed(KeyCode::Digit6) {
 		current_block.block = DebugSlab::BLOCK;
+	}
+}
+
+fn send_block_update(block_pos: BlockPos, chunk_updates: &mut EventWriter<ChunkUpdateEvent>) {
+	let chunk_pos = block_pos.to_chunk_pos();
+	chunk_updates.send(ChunkUpdateEvent { chunk_pos });
+
+	// update neighbouring chunks
+	for neighbour_pos in block_pos.neighbours() {
+		let neighbour_chunk_pos = neighbour_pos.to_chunk_pos();
+		if neighbour_chunk_pos == chunk_pos {
+			continue;
+		}
+		chunk_updates.send(ChunkUpdateEvent {
+			chunk_pos: neighbour_chunk_pos,
+		});
 	}
 }

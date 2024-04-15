@@ -39,4 +39,8 @@ impl LookDirection {
 	// 		yaw: q.y,
 	// 	}
 	// }
+
+	pub fn dir(self) -> Vec3 {
+		self.to_quat() * -Vec3::Z
+	}
 }

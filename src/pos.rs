@@ -1,9 +1,10 @@
-use crate::game_world::chunk::CHUNK_LENGTH;
+use crate::{face::Face, game_world::chunk::CHUNK_LENGTH};
 use bevy::{
 	math::UVec3,
 	prelude::{IVec3, Vec3},
 };
 use serde::{Deserialize, Serialize};
+use std::ops::Add;
 
 #[derive(Default, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BlockPos(pub IVec3);
@@ -71,6 +72,21 @@ impl BlockPos {
 			(self.0.z as f32 / CHUNK_LENGTH as f32).floor() as i32,
 		))
 	}
+
+	/// gets all block positions that touch this block, meaning diagonals are not counted
+	pub fn neighbours(self) -> impl Iterator<Item = Self> {
+		Face::all()
+			.into_iter()
+			.map(move |face| Self(self.0 + face.normal()))
+	}
+}
+
+impl Add<IVec3> for BlockPos {
+	type Output = Self;
+
+	fn add(self, rhs: IVec3) -> Self::Output {
+		Self(self.0 + rhs)
+	}
 }
 
 impl ChunkPos {
@@ -92,5 +108,20 @@ impl ChunkPos {
 			self.0.y as f32 * CHUNK_LENGTH as f32,
 			self.0.z as f32 * CHUNK_LENGTH as f32,
 		)
+	}
+
+	/// gets all chunk positions that touch this chunk, meaning diagonals are not counted
+	pub fn neighbours(self) -> impl Iterator<Item = Self> {
+		Face::all()
+			.into_iter()
+			.map(move |face| Self(self.0 + face.normal()))
+	}
+}
+
+impl Add<IVec3> for ChunkPos {
+	type Output = Self;
+
+	fn add(self, rhs: IVec3) -> Self::Output {
+		Self(self.0 + rhs)
 	}
 }

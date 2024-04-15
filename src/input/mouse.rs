@@ -1,8 +1,11 @@
 //! input handling for mouse
 
-use super::{AttackInput, InputSet, InteractInput, RotateInput};
+use super::{AttackInput, InputSet, InteractInput, RotateInput, ScrollInput};
 use crate::savedata;
-use bevy::{input::mouse::MouseMotion, prelude::*};
+use bevy::{
+	input::mouse::{MouseMotion, MouseWheel},
+	prelude::*,
+};
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fs};
 
@@ -13,7 +16,13 @@ impl Plugin for MousePlugin {
 		app.insert_resource(Controls::load().unwrap_or_default())
 			.add_systems(
 				Update,
-				(get_rotate_input, get_attack_input, get_interact_input).in_set(InputSet::Get),
+				(
+					get_rotate_input,
+					get_scroll_input,
+					get_attack_input,
+					get_interact_input,
+				)
+					.in_set(InputSet::Get),
 			);
 	}
 }
@@ -29,6 +38,17 @@ fn get_rotate_input(
 		// not sure why but these have to be negated
 		rotate_input.pitch -= delta.y;
 		rotate_input.yaw -= delta.x;
+	}
+}
+
+fn get_scroll_input(
+	mut scroll_input: ResMut<ScrollInput>,
+	mut mouse_scroll_events: EventReader<MouseWheel>,
+) {
+	// FIXME this currently breaks scrolling in bevy_inspector_egui
+	// currently ignores the scroll unit
+	for event in mouse_scroll_events.read() {
+		scroll_input.delta += event.y;
 	}
 }
 

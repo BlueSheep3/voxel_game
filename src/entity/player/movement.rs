@@ -17,8 +17,12 @@ impl Plugin for MovementPlugin {
 			.register_type::<MovementValues>()
 			.add_systems(
 				Update,
-				(walk, jump)
-					.run_if(not(in_state(PlayerCamMode::FreeCam)))
+				(
+					(jump, walk).run_if(not(in_state(PlayerCamMode::FreeCam))),
+					friction,
+				)
+					// chain ensures that walk and friction are always done in the same order
+					.chain()
 					.run_if(in_state(GlobalState::InWorld))
 					.in_set(MovementSet::Accel)
 					.in_set(InputSet::Use),
@@ -53,13 +57,6 @@ impl Default for MovementValues {
 	}
 }
 
-// FIXME currently VERY slippery
-// const MOVE_GROUND_ACCEL: f32 = 12.0;
-// const MOVE_FRICTION: f32 = 0.3;
-// const MOVE_AIR_ACCEL: f32 = 8.0;
-// const MOVE_DRAG: f32 = 0.2;
-// const JUMP_STRENGTH: f32 = 10.0;
-
 fn walk(
 	walk_input: Res<WalkInput>,
 	mut player: Query<(&mut Velocity, &LookDirection, &OnGround), With<Player>>,
@@ -73,9 +70,24 @@ fn walk(
 	let prev_y = player_vel.vel.y;
 	if on_ground.0 {
 		player_vel.vel += vec * values.move_ground_accel * dt;
-		player_vel.vel *= (-values.move_friction * dt).exp2();
 	} else {
 		player_vel.vel += vec * values.move_air_accel * dt;
+	}
+	player_vel.vel.y = prev_y;
+}
+
+fn friction(
+	mut player: Query<(&mut Velocity, &OnGround), With<Player>>,
+	time: Res<Time>,
+	values: Res<MovementValues>,
+) {
+	let dt = time.delta_seconds();
+	let (mut player_vel, on_ground) = player.single_mut();
+
+	let prev_y = player_vel.vel.y;
+	if on_ground.0 {
+		player_vel.vel *= (-values.move_friction * dt).exp2();
+	} else {
 		player_vel.vel *= (-values.move_drag * dt).exp2();
 	}
 	player_vel.vel.y = prev_y;

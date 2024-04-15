@@ -21,7 +21,11 @@ struct BlockMeshInfo {
 	pos: UVec3,
 }
 
-pub fn create_chunk_mesh(chunk: &Chunk, block_models: &HashMap<BlockId, BlockModel<Rect>>) -> Mesh {
+pub fn create_chunk_mesh(
+	chunk: &Chunk,
+	neighbour_chunks: &FaceMap<Chunk>,
+	block_models: &HashMap<BlockId, BlockModel<Rect>>,
+) -> Mesh {
 	let meshes = chunk
 		.blocks
 		.iter_xyz()
@@ -36,7 +40,7 @@ pub fn create_chunk_mesh(chunk: &Chunk, block_models: &HashMap<BlockId, BlockMod
 		})
 		.flat_map(|(pos, cuboid, should_cull)| {
 			let culled = if should_cull {
-				get_culled_faces_at(chunk, pos, block_models)
+				get_culled_faces_at(chunk, neighbour_chunks, pos, block_models)
 			} else {
 				// lazy approach of not culling anything if it's not a full block
 				// TODO cull those faces that are still covered up
@@ -63,15 +67,22 @@ pub fn create_chunk_mesh(chunk: &Chunk, block_models: &HashMap<BlockId, BlockMod
 
 fn get_culled_faces_at(
 	chunk: &Chunk,
+	neighbour_chunks: &FaceMap<Chunk>,
 	pos: UVec3,
 	block_models: &HashMap<BlockId, BlockModel<Rect>>,
 ) -> FacesMask {
 	let mut culled = FacesMask::none();
 
 	macro_rules! cull {
-		($axis:ident, $offset:expr, $face:ident, $val:expr) => {
-			if pos.$axis == $val as u32 {
-				// TODO look for block in the neighbour chunk
+		($axis:ident, $offset:expr, $face:ident, [$border:expr, $other_border:expr]) => {
+			if pos.$axis == $border as u32 {
+				let chunk = neighbour_chunks.get(Face::$face);
+				let mut adjacent_pos = pos;
+				adjacent_pos.$axis = $other_border as u32;
+				let model = block_models.get(&chunk.blocks[adjacent_pos].id).unwrap();
+				if model.should_cull {
+					culled.set(Face::$face);
+				}
 			} else {
 				let pos = IVec3::try_from(pos).unwrap() + $offset;
 				let pos: UVec3 = pos.try_into().unwrap();
@@ -83,12 +94,12 @@ fn get_culled_faces_at(
 		};
 	}
 
-	cull!(x, IVec3::X, Right, CHUNK_LENGTH - 1);
-	cull!(x, -IVec3::X, Left, 0);
-	cull!(y, IVec3::Y, Up, CHUNK_LENGTH - 1);
-	cull!(y, -IVec3::Y, Down, 0);
-	cull!(z, IVec3::Z, Back, CHUNK_LENGTH - 1);
-	cull!(z, -IVec3::Z, Forward, 0);
+	cull!(x, IVec3::X, Right, [CHUNK_LENGTH - 1, 0]);
+	cull!(x, -IVec3::X, Left, [0, CHUNK_LENGTH - 1]);
+	cull!(y, IVec3::Y, Up, [CHUNK_LENGTH - 1, 0]);
+	cull!(y, -IVec3::Y, Down, [0, CHUNK_LENGTH - 1]);
+	cull!(z, IVec3::Z, Back, [CHUNK_LENGTH - 1, 0]);
+	cull!(z, -IVec3::Z, Forward, [0, CHUNK_LENGTH - 1]);
 
 	culled
 }

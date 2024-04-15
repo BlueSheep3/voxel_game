@@ -5,10 +5,8 @@ use self::mesh::create_chunk_mesh;
 use super::ChunkUpdateEvent;
 use crate::{
 	block_model::{GlobalTexture, LoadingState},
-	game_world::{
-		loading::{ChunkLoadedEvent, ChunkUnloadedEvent},
-		GameWorld,
-	},
+	face::FaceMap,
+	game_world::{loading::UpdateChunkIsLoadedEvent, GameWorld},
 	pos::ChunkPos,
 	GlobalState,
 };
@@ -111,10 +109,13 @@ fn cleanup(mut commands: Commands, chunk_mesh_parent: Query<Entity, With<ChunkMe
 
 /// queues the chunks that are currently being loaded into the render distance
 fn queue_loading_chunks(
-	mut chunk_loading_event: EventReader<ChunkLoadedEvent>,
+	mut chunk_loading_event: EventReader<UpdateChunkIsLoadedEvent>,
 	mut queued_chunks: ResMut<QueuedChunkRedraws>,
 ) {
 	for event in chunk_loading_event.read() {
+		if !event.just_became_visible() {
+			continue;
+		}
 		queued_chunks.queue.push(ChunkRedrawInfo {
 			chunk_pos: event.pos,
 		});
@@ -125,8 +126,15 @@ fn queue_loading_chunks(
 fn queue_updating_chunks(
 	mut chunk_updating_event: EventReader<ChunkUpdateEvent>,
 	mut queued_chunks: ResMut<QueuedChunkRedraws>,
+	game_world: Res<GameWorld>,
 ) {
 	for event in chunk_updating_event.read() {
+		let Some(chunk) = game_world.chunks.get(&event.chunk_pos) else {
+			continue;
+		};
+		if !chunk.loaded.is_simple_loaded() {
+			continue;
+		}
 		queued_chunks.queue.push(ChunkRedrawInfo {
 			chunk_pos: event.chunk_pos,
 		});
@@ -134,13 +142,16 @@ fn queue_updating_chunks(
 }
 
 fn despawn_chunk_on_unload(
-	mut unloaded_event: EventReader<ChunkUnloadedEvent>,
+	mut chunk_loading_event: EventReader<UpdateChunkIsLoadedEvent>,
 	mut commands: Commands,
 	mut mesh_entites: ResMut<ChunkMeshEntities>,
 	chunk_mesh_parent: Query<Entity, With<ChunkMeshParent>>,
 ) {
 	let chunk_mesh_parent = chunk_mesh_parent.single();
-	for event in unloaded_event.read() {
+	for event in chunk_loading_event.read() {
+		if !event.just_became_invisible() {
+			continue;
+		}
 		if let Some(entity) = mesh_entites.entities.remove(&event.pos) {
 			// currently a child has to manually removed from the parent
 			commands
@@ -152,10 +163,13 @@ fn despawn_chunk_on_unload(
 }
 
 fn stop_chunk_redraw_tasks_on_unload(
-	mut unloaded_event: EventReader<ChunkUnloadedEvent>,
+	mut chunk_loading_event: EventReader<UpdateChunkIsLoadedEvent>,
 	mut mesh_tasks: ResMut<MeshTasks>,
 ) {
-	for event in unloaded_event.read() {
+	for event in chunk_loading_event.read() {
+		if !event.just_became_invisible() {
+			continue;
+		}
 		if let Some(task) = mesh_tasks.tasks.remove(&event.pos) {
 			block_on(task.cancel());
 		}
@@ -178,13 +192,34 @@ fn create_chunk_redraw_tasks(
 	}
 
 	let ChunkRedrawInfo { chunk_pos } = queued_chunk_redraws.queue.remove(0);
-	let chunk = game_world.chunks.get(&chunk_pos).unwrap();
+	let chunk = game_world
+		.chunks
+		.get(&chunk_pos)
+		.expect("got chunk update event, even though there is no chunk");
 
 	let block_models = global_texture.mappings.clone();
 	let cloned_chunk = chunk.clone();
 
+	let neighbour_chunks = FaceMap::from_map(|face| {
+		let pos = chunk_pos + face.normal();
+		game_world.chunks.get(&pos).cloned()
+	})
+	.all_some();
+	let Some(neighbour_chunks) = neighbour_chunks else {
+		// a chunk must have neighbouring chunks to be drawable,
+		// because of culling blocks at the edge of the chunk
+		return;
+	};
+	if neighbour_chunks
+		.iter()
+		.any(|chunk| !chunk.loaded.is_simple_loaded())
+	{
+		return;
+	}
+
 	let pool = AsyncComputeTaskPool::get();
-	let task = pool.spawn(async move { create_chunk_mesh(&cloned_chunk, &block_models) });
+	let task = pool
+		.spawn(async move { create_chunk_mesh(&cloned_chunk, &neighbour_chunks, &block_models) });
 	mesh_tasks.tasks.insert(chunk_pos, task);
 }
 
@@ -209,8 +244,6 @@ fn spawn_chunk_meshes_from_tasks(
 			unreachable!()
 		};
 
-		let world_pos = chunk_pos.to_world_pos();
-
 		let mesh = block_on(task);
 		let cube_mesh_handle = meshes.add(mesh);
 
@@ -228,7 +261,7 @@ fn spawn_chunk_meshes_from_tasks(
 				PbrBundle {
 					mesh: cube_mesh_handle,
 					material: global_material.material.clone(),
-					transform: Transform::from_translation(world_pos),
+					transform: Transform::from_translation(chunk_pos.to_world_pos()),
 					..default()
 				},
 				ChunkMesh,

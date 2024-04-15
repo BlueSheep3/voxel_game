@@ -78,6 +78,10 @@ impl<T> FaceMap<T> {
 		self.0.iter()
 	}
 
+	pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+		self.0.iter_mut()
+	}
+
 	pub fn into_iter(self) -> impl Iterator<Item = T> {
 		self.0.into_iter()
 	}
@@ -91,6 +95,22 @@ impl<T> FaceMap<T> {
 
 	pub fn map<U>(self, f: impl FnMut(T) -> U) -> FaceMap<U> {
 		FaceMap(self.0.map(f))
+	}
+
+	/// creates a new FaceMap by mapping over every face
+	pub fn from_map(f: impl FnMut(Face) -> T) -> Self {
+		use Face as F;
+		[F::Right, F::Left, F::Up, F::Down, F::Back, F::Forward]
+			.map(f)
+			.into()
+	}
+}
+
+impl<T> FaceMap<Option<T>> {
+	pub fn all_some(self) -> Option<FaceMap<T>> {
+		self.into_iter()
+			.collect::<Option<Vec<_>>>()
+			.map(|vec| FaceMap::try_from(vec).unwrap_or_else(|_| unreachable!()))
 	}
 }
 

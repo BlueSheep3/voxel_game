@@ -7,7 +7,7 @@ use crate::{
 		player::{Player, EYE_HEIGHT},
 		LookDirection,
 	},
-	input::{CrouchInput, InputSet, JumpInput, RotateInput, WalkInput},
+	input::{CrouchInput, InputSet, JumpInput, RotateInput, ScrollInput, WalkInput},
 	GlobalState,
 };
 use bevy::prelude::*;
@@ -16,13 +16,15 @@ pub struct FreeCamPlugin;
 
 impl Plugin for FreeCamPlugin {
 	fn build(&self, app: &mut App) {
-		app.add_systems(OnEnter(PlayerCamMode::FreeCam), spawn)
+		app.insert_resource(FreeCamSpeed::default())
+			.add_systems(OnEnter(PlayerCamMode::FreeCam), spawn)
 			.add_systems(OnExit(PlayerCamMode::FreeCam), despawn)
 			.add_systems(
 				Update,
 				(
 					input_translation,
 					input_rotation.run_if(in_state(CanRotateCam(true))),
+					change_speed,
 				)
 					.run_if(in_state(GlobalState::InWorld))
 					.run_if(in_state(PlayerCamMode::FreeCam))
@@ -31,10 +33,19 @@ impl Plugin for FreeCamPlugin {
 	}
 }
 
-const MOVE_SPEED: f32 = 8.0;
-
 #[derive(Component)]
 struct FreeCam;
+
+#[derive(Resource)]
+struct FreeCamSpeed {
+	speed: f32,
+}
+
+impl Default for FreeCamSpeed {
+	fn default() -> Self {
+		Self { speed: 8. }
+	}
+}
 
 fn spawn(mut commands: Commands, player: Query<(&Transform, &LookDirection), With<Player>>) {
 	let (player_trans, look_dir) = player.single();
@@ -61,17 +72,18 @@ fn input_translation(
 	crouch_input: Res<CrouchInput>,
 	mut cam: Query<(&mut Transform, &LookDirection), With<FreeCam>>,
 	time: Res<Time>,
+	speed: Res<FreeCamSpeed>,
 ) {
 	let dt = time.delta_seconds();
 	let (mut cam_trans, look_dir) = cam.single_mut();
 	let walk = walk_input.with_look_dir(*look_dir);
-	cam_trans.translation += walk * MOVE_SPEED * dt;
+	cam_trans.translation += walk * speed.speed * dt;
 
 	if crouch_input.holding {
-		cam_trans.translation.y -= MOVE_SPEED * dt;
+		cam_trans.translation.y -= speed.speed * dt;
 	}
 	if jump_input.holding {
-		cam_trans.translation.y += MOVE_SPEED * dt;
+		cam_trans.translation.y += speed.speed * dt;
 	}
 }
 
@@ -83,4 +95,8 @@ fn input_rotation(
 
 	*look_dir = rotate_input.rotate_look_dir(*look_dir);
 	cam_trans.rotation = look_dir.to_quat();
+}
+
+fn change_speed(scroll_input: Res<ScrollInput>, mut speed: ResMut<FreeCamSpeed>) {
+	speed.speed *= (scroll_input.delta() / 8.).exp2();
 }

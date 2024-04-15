@@ -1,8 +1,7 @@
 # Debug Features / QOL
 
-- faster freecam flying (being able to change how fast it is)
-  - player visible when in freecam
 - flying without freecam
+- snapping rotation
 
 
 # UI
@@ -22,6 +21,11 @@
 
 # Performance / Optimization
 
-- culling blocks between chunk borders
 - combine adjacent faces with same texture into one quad
 - remove unused block texture assets after cloning them into the texture atlas
+
+
+# Input
+
+- input system that allows customizing between keyboard and mouse better
+- create new input types more easily

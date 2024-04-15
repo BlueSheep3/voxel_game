@@ -1,6 +1,7 @@
 mod cam;
 mod interact_block;
 mod movement;
+mod player_model;
 
 use super::{
 	collision::collider::BoxCollider,
@@ -18,6 +19,7 @@ impl Plugin for PlayerPlugin {
 			cam::CamPlugin,
 			interact_block::InteractBlockPlugin,
 			movement::MovementPlugin,
+			player_model::PlayerModelPlugin,
 		))
 		.add_systems(Startup, setup);
 	}

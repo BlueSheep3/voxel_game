@@ -17,8 +17,7 @@ pub struct LoadingPlugin;
 
 impl Plugin for LoadingPlugin {
 	fn build(&self, app: &mut App) {
-		app.add_event::<ChunkLoadedEvent>()
-			.add_event::<ChunkUnloadedEvent>()
+		app.add_event::<UpdateChunkIsLoadedEvent>()
 			.insert_resource(ChunkLoadingQueue::default())
 			.insert_resource(ChunkUnloadingQueue::default())
 			.add_systems(
@@ -28,24 +27,30 @@ impl Plugin for LoadingPlugin {
 					push_chunk_pos_to_unload_queue,
 					load_chunks,
 					unload_chunks,
+					update_chunk_visibility,
 				)
 					.run_if(in_state(GlobalState::InWorld)),
 			);
 	}
 }
 
-/// event that is sent when a chunk is loaded<br>
-/// the chunk is added to the game_world before sending this event
-#[derive(Event, Debug)]
-pub struct ChunkLoadedEvent {
+/// event that is sent when the loading state of a chunk changes.<br>
+/// the chunk may be added or removed from the game_world before sending this event
+#[derive(Event, Debug, Clone, Copy)]
+pub struct UpdateChunkIsLoadedEvent {
 	pub pos: ChunkPos,
+	pub old_is_loaded: IsLoaded,
+	pub new_is_loaded: IsLoaded,
 }
 
-/// event that is sent when a chunk is unloaded<br>
-/// the chunk is deleted from the game_world before sending this event
-#[derive(Event, Debug)]
-pub struct ChunkUnloadedEvent {
-	pub pos: ChunkPos,
+impl UpdateChunkIsLoadedEvent {
+	pub fn just_became_visible(&self) -> bool {
+		self.new_is_loaded.is_visible() && !self.old_is_loaded.is_visible()
+	}
+
+	pub fn just_became_invisible(&self) -> bool {
+		!self.new_is_loaded.is_visible() && self.old_is_loaded.is_visible()
+	}
 }
 
 #[derive(Resource, Debug, Default)]
@@ -59,7 +64,7 @@ struct ChunkUnloadingQueue {
 }
 
 fn load_chunks(
-	mut events: EventWriter<ChunkLoadedEvent>,
+	mut events: EventWriter<UpdateChunkIsLoadedEvent>,
 	mut game_world: ResMut<GameWorld>,
 	mut queue: ResMut<ChunkLoadingQueue>,
 ) {
@@ -69,21 +74,28 @@ fn load_chunks(
 		return;
 	};
 
+	let loaded;
 	if let Some(chunk) = game_world.chunks.get_mut(&pos) {
-		if chunk.loaded.is_player_loaded() {
+		if chunk.loaded.is_simple_loaded() {
 			return;
 		}
-		chunk.loaded.set_player_loaded(true);
+		chunk.loaded.set_simple_loaded(true);
+		loaded = chunk.loaded;
 	} else {
-		let chunk = worldgen::generate_chunk(pos, game_world.seed, IsLoaded::PLAYER_LOADED);
+		let chunk = worldgen::generate_chunk(pos, game_world.seed, IsLoaded::SIMPLE_LOADED);
+		loaded = chunk.loaded;
 		game_world.chunks.insert(pos, chunk);
 	}
 
-	events.send(ChunkLoadedEvent { pos });
+	events.send(UpdateChunkIsLoadedEvent {
+		pos,
+		old_is_loaded: IsLoaded::NOT_LOADED,
+		new_is_loaded: loaded,
+	});
 }
 
 fn unload_chunks(
-	mut events: EventWriter<ChunkUnloadedEvent>,
+	mut events: EventWriter<UpdateChunkIsLoadedEvent>,
 	mut game_world: ResMut<GameWorld>,
 	mut queue: ResMut<ChunkUnloadingQueue>,
 ) {
@@ -99,9 +111,15 @@ fn unload_chunks(
 	let Some(chunk) = game_world.chunks.get_mut(&pos) else {
 		return;
 	};
-	chunk.loaded.set_player_loaded(false);
+	let prev_loaded = chunk.loaded;
+	chunk.loaded.set_simple_loaded(false);
+	let loaded = chunk.loaded;
 
-	events.send(ChunkUnloadedEvent { pos });
+	events.send(UpdateChunkIsLoadedEvent {
+		pos,
+		old_is_loaded: prev_loaded,
+		new_is_loaded: loaded,
+	});
 }
 
 fn push_chunk_pos_to_load_queue(
@@ -122,7 +140,7 @@ fn push_chunk_pos_to_load_queue(
 			game_world
 				.chunks
 				.get(pos)
-				.map(|c| !c.loaded.is_player_loaded())
+				.map(|c| !c.loaded.is_simple_loaded())
 				.unwrap_or(true)
 		})
 		.filter(|pos| !queue.queue.contains(pos))
@@ -147,7 +165,7 @@ fn push_chunk_pos_to_unload_queue(
 	let chunk_pos_to_unload = game_world
 		.chunks
 		.iter()
-		.filter(|(_, chunk)| chunk.loaded.is_player_loaded())
+		.filter(|(_, chunk)| chunk.loaded.is_simple_loaded())
 		.filter(|(pos, _)| !in_render_distance.contains(pos))
 		.filter(|(pos, _)| !queue.queue.contains(pos))
 		.map(|(pos, _)| *pos)
@@ -163,8 +181,10 @@ fn chunk_pos_in_render_distance(player_pos: Vec3, render_distance: (u32, u32)) -
 	// TODO load chunks in a sphere
 
 	let mut chunk_pos_to_load = Vec::new();
-	let rdh = render_distance.0 as i32;
-	let rdv = render_distance.1 as i32;
+	// these need to incremented by 1 because only chunks
+	// surounded by loaded chunks are actually rendered
+	let rdh = render_distance.0 as i32 + 1;
+	let rdv = render_distance.1 as i32 + 1;
 	let range = |offset, rd| (offset - rd)..=(offset + rd);
 	let current_chunk = player_pos.to_chunk_pos();
 
@@ -179,4 +199,44 @@ fn chunk_pos_in_render_distance(player_pos: Vec3, render_distance: (u32, u32)) -
 	chunk_pos_to_load.sort_by_key(|pos| pos.0.distance_squared(current_chunk.0));
 
 	chunk_pos_to_load
+}
+
+fn update_chunk_visibility(
+	mut event_writer: EventWriter<UpdateChunkIsLoadedEvent>,
+	mut game_world: ResMut<GameWorld>,
+) {
+	for pos in game_world.chunks.keys().cloned().collect::<Vec<_>>() {
+		let is_loaded = game_world.chunks.get(&pos).unwrap().loaded;
+		if !is_loaded.is_simple_loaded() {
+			// chunks that aren't loaded can't be visible
+			continue;
+		}
+		let should_be_visible = are_surounding_chunks_loaded(pos, &game_world);
+		let Some(chunk) = game_world.chunks.get_mut(&pos) else {
+			continue;
+		};
+		let old_loaded = chunk.loaded;
+		chunk.loaded.set_visible(should_be_visible);
+		if old_loaded == chunk.loaded {
+			// nothing changed => no event should be sent
+			continue;
+		}
+		event_writer.send(UpdateChunkIsLoadedEvent {
+			pos,
+			old_is_loaded: old_loaded,
+			new_is_loaded: chunk.loaded,
+		});
+	}
+}
+
+fn are_surounding_chunks_loaded(pos: ChunkPos, game_world: &GameWorld) -> bool {
+	for pos in pos.neighbours() {
+		let Some(chunk) = game_world.chunks.get(&pos) else {
+			return false;
+		};
+		if !chunk.loaded.is_simple_loaded() {
+			return false;
+		}
+	}
+	true
 }
