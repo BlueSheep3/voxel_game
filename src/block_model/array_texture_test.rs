@@ -3,7 +3,8 @@ use bevy::{
 	prelude::*,
 	render::{
 		mesh::{Indices, PrimitiveTopology},
-		render_asset::RenderAssetUsages, texture::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor},
+		render_asset::RenderAssetUsages,
+		texture::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor},
 	},
 };
 
@@ -58,6 +59,7 @@ fn set_global_texture(
 	{
 		return;
 	}
+
 	let mut image = images.get(loading_texture.image.clone()).unwrap().clone();
 	image.reinterpret_stacked_2d_as_array(3);
 	image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
@@ -65,8 +67,8 @@ fn set_global_texture(
 		address_mode_v: ImageAddressMode::Repeat,
 		..default()
 	});
-	let image = images.add(image);
 
+	let image = images.add(image);
 	commands.insert_resource(GlobalArrayTexture { image });
 	next_loading_state.set(LoadingState::Finished);
 }
@@ -76,18 +78,11 @@ fn spawn_mesh(
 	mut materials: ResMut<Assets<ChunkMaterial>>,
 	mut commands: Commands,
 	global_array_texture: Res<GlobalArrayTexture>,
-	// asset_server: Res<AssetServer>,
 ) {
 	let mesh = meshes.add(create_plane_mesh());
 	let material = materials.add(ChunkMaterial {
 		texture: global_array_texture.image.clone(),
-		// pbr_texture: global_array_texture.image.clone(),
 	});
-	// let material = materials.add(StandardMaterial {
-	// 	unlit: true,
-	// 	base_color_texture: Some(asset_server.load("sprite/Dirt.png")),
-	// 	..default()
-	// });
 	let transform = Transform::from_translation(Vec3::new(0., 10., 0.));
 
 	commands.spawn((
@@ -102,7 +97,6 @@ fn spawn_mesh(
 	));
 }
 
-/// creates the mesh for a plane
 fn create_plane_mesh() -> Mesh {
 	let mut mesh = Mesh::new(
 		PrimitiveTopology::TriangleList,
@@ -123,7 +117,7 @@ fn get_mesh_positions() -> Vec<[f32; 3]> {
 }
 
 fn get_mesh_uvs() -> Vec<[f32; 2]> {
-	vec![[0., 0.], [2., 0.], [0., 1.], [2., 1.]]
+	vec![[0., -0.5], [2., 0.], [0., 1.], [2., 1.]]
 }
 
 fn get_mesh_normals() -> Vec<[f32; 3]> {
