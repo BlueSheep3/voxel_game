@@ -1,15 +1,20 @@
 // mod block_model_asset;
+mod array_texture_test;
+mod chunk_material;
 
 use crate::{block::BlockId, face::FaceMap, GlobalState};
 use bevy::{asset::LoadState, prelude::*};
 use serde::Deserialize;
 use std::{collections::HashMap, fs};
 
+use self::{array_texture_test::ArrayTextureTestPlugin, chunk_material::ChunkMaterialPlugin};
+
 pub struct BlockModelPlugin;
 
 impl Plugin for BlockModelPlugin {
 	fn build(&self, app: &mut App) {
-		app.init_state::<LoadingState>()
+		app.add_plugins((ArrayTextureTestPlugin, ChunkMaterialPlugin))
+			.init_state::<LoadingState>()
 			.insert_resource(BlockModelWithImages::default())
 			.add_systems(OnEnter(GlobalState::Loading), load_images)
 			.add_systems(
