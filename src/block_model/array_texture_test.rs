@@ -3,7 +3,7 @@ use bevy::{
 	prelude::*,
 	render::{
 		mesh::{Indices, PrimitiveTopology},
-		render_asset::RenderAssetUsages,
+		render_asset::RenderAssetUsages, texture::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor},
 	},
 };
 
@@ -60,6 +60,11 @@ fn set_global_texture(
 	}
 	let mut image = images.get(loading_texture.image.clone()).unwrap().clone();
 	image.reinterpret_stacked_2d_as_array(3);
+	image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+		address_mode_u: ImageAddressMode::Repeat,
+		address_mode_v: ImageAddressMode::Repeat,
+		..default()
+	});
 	let image = images.add(image);
 
 	commands.insert_resource(GlobalArrayTexture { image });
@@ -118,7 +123,7 @@ fn get_mesh_positions() -> Vec<[f32; 3]> {
 }
 
 fn get_mesh_uvs() -> Vec<[f32; 2]> {
-	vec![[0., 0.], [1., 0.], [0., 1.], [1., 1.]]
+	vec![[0., 0.], [2., 0.], [0., 1.], [2., 1.]]
 }
 
 fn get_mesh_normals() -> Vec<[f32; 3]> {
@@ -126,7 +131,7 @@ fn get_mesh_normals() -> Vec<[f32; 3]> {
 }
 
 fn get_mesh_tris() -> Vec<u32> {
-	vec![0, 1, 2, 2, 3, 0]
+	vec![0, 1, 2, 2, 1, 3]
 }
 
 fn get_mesh_voxel_indices() -> Vec<u32> {

@@ -37,9 +37,9 @@ pub struct ChunkMaterial {
 }
 
 impl Material for ChunkMaterial {
-	// fn vertex_shader() -> ShaderRef {
-	// 	"shaders/chunk.wgsl".into()
-	// }
+	fn vertex_shader() -> ShaderRef {
+		"shaders/chunk.wgsl".into()
+	}
 
 	fn fragment_shader() -> ShaderRef {
 		"shaders/chunk.wgsl".into()
