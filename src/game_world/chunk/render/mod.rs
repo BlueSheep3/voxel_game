@@ -11,6 +11,7 @@ use crate::{
 	GlobalState,
 };
 use bevy::{
+	pbr::ExtendedMaterial,
 	prelude::*,
 	tasks::{block_on, AsyncComputeTaskPool, Task},
 	utils::HashMap,
@@ -66,7 +67,7 @@ struct ChunkMeshEntities {
 
 #[derive(Resource)]
 struct GlobalChunkMaterial {
-	material: Handle<ChunkMaterial>,
+	material: Handle<ExtendedMaterial<StandardMaterial, ChunkMaterial>>,
 }
 
 fn has_loaded_global_material(world: &World) -> bool {
@@ -76,10 +77,16 @@ fn has_loaded_global_material(world: &World) -> bool {
 fn setup_global_material(
 	mut commands: Commands,
 	global_texture: Res<GlobalTexture>,
-	mut materials: ResMut<Assets<ChunkMaterial>>,
+	mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, ChunkMaterial>>>,
 ) {
-	let global_material_handle = materials.add(ChunkMaterial {
-		texture: global_texture.image.clone(),
+	let global_material_handle = materials.add(ExtendedMaterial {
+		base: StandardMaterial {
+			unlit: true,
+			..Default::default()
+		},
+		extension: ChunkMaterial {
+			texture: global_texture.image.clone(),
+		},
 	});
 
 	let global_material = GlobalChunkMaterial {

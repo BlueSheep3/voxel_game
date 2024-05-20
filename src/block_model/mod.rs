@@ -1,8 +1,8 @@
 // mod block_model_asset;
-mod array_texture_test;
 mod chunk_material;
+mod wireframe_rendering;
 
-use self::{array_texture_test::ArrayTextureTestPlugin, chunk_material::ChunkMaterialPlugin};
+use self::{chunk_material::ChunkMaterialPlugin, wireframe_rendering::WireframeRenderingPlugin};
 use crate::{block::BlockId, face::FaceMap, GlobalState};
 use bevy::{
 	asset::LoadState,
@@ -23,7 +23,7 @@ pub struct BlockModelPlugin;
 
 impl Plugin for BlockModelPlugin {
 	fn build(&self, app: &mut App) {
-		app.add_plugins((ArrayTextureTestPlugin, ChunkMaterialPlugin))
+		app.add_plugins((ChunkMaterialPlugin, WireframeRenderingPlugin))
 			.init_state::<LoadingState>()
 			.insert_resource(BlockModelWithImages::default())
 			.add_systems(OnEnter(GlobalState::Loading), load_images)
@@ -162,6 +162,7 @@ fn setup_global_texture(
 }
 
 // TODO use result instead of unwrap
+// TODO seperate this function out more
 fn get_texture_atlas<'a, 'b>(
 	block_images: &BlockModelWithImages,
 	images: &'a Assets<Image>,

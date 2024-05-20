@@ -47,7 +47,7 @@ fn main() {
 					..default()
 				})
 				.set(ImagePlugin::default_nearest()),
-			WorldInspectorPlugin::new().run_if(input_toggle_active(true, KeyCode::Escape)),
+			WorldInspectorPlugin::new().run_if(input_toggle_active(false, KeyCode::Escape)),
 			block_model::BlockModelPlugin,
 			game_world::GameWorldPlugin,
 			input::InputPlugin,

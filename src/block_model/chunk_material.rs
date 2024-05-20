@@ -2,7 +2,7 @@
 //! https://playspacefarer.com/voxel-array-textures/
 
 use bevy::{
-	pbr::{MaterialPipeline, MaterialPipelineKey},
+	pbr::{ExtendedMaterial, MaterialExtension, MaterialExtensionKey, MaterialExtensionPipeline},
 	prelude::*,
 	render::{
 		mesh::{MeshVertexAttribute, MeshVertexBufferLayout},
@@ -17,7 +17,9 @@ pub struct ChunkMaterialPlugin;
 
 impl Plugin for ChunkMaterialPlugin {
 	fn build(&self, app: &mut App) {
-		app.add_plugins(MaterialPlugin::<ChunkMaterial>::default());
+		app.add_plugins(MaterialPlugin::<
+			ExtendedMaterial<StandardMaterial, ChunkMaterial>,
+		>::default());
 	}
 }
 
@@ -26,12 +28,12 @@ pub const ATTRIBUTE_BASE_VOXEL_INDICES: MeshVertexAttribute =
 
 #[derive(AsBindGroup, Debug, Clone, Asset, TypePath)]
 pub struct ChunkMaterial {
-	#[texture(0, dimension = "2d_array")]
-	#[sampler(1)]
+	#[texture(100, dimension = "2d_array")]
+	#[sampler(101)]
 	pub texture: Handle<Image>,
 }
 
-impl Material for ChunkMaterial {
+impl MaterialExtension for ChunkMaterial {
 	fn vertex_shader() -> ShaderRef {
 		"shaders/chunk.wgsl".into()
 	}
@@ -40,15 +42,19 @@ impl Material for ChunkMaterial {
 		"shaders/chunk.wgsl".into()
 	}
 
-	fn alpha_mode(&self) -> AlphaMode {
-		AlphaMode::Blend
-	}
+	// fn alpha_mode(&self) -> AlphaMode {
+	// 	AlphaMode::Blend
+	// }
 
 	fn specialize(
-		_pipeline: &MaterialPipeline<Self>,
+		// _pipeline: &MaterialPipeline<Self>,
+		// descriptor: &mut RenderPipelineDescriptor,
+		// layout: &MeshVertexBufferLayout,
+		// _key: MaterialPipelineKey<Self>,
+		_pipeline: &MaterialExtensionPipeline,
 		descriptor: &mut RenderPipelineDescriptor,
 		layout: &MeshVertexBufferLayout,
-		_key: MaterialPipelineKey<Self>,
+		_key: MaterialExtensionKey<Self>,
 	) -> Result<(), SpecializedMeshPipelineError> {
 		let vertex_layout = layout.get_layout(&[
 			Mesh::ATTRIBUTE_POSITION.at_shader_location(0),

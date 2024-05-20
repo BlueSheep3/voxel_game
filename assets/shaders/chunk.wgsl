@@ -1,21 +1,35 @@
 // FIXME draw order is incorrect
 
-// this is a modified combination of:
+// this is a modified combination of a bunch of bevy examples:
 // https://github.com/bevyengine/bevy/blob/latest/assets/shaders/custom_vertex_attribute.wgsl
-// with some fragment shader things from:
 // https://github.com/bevyengine/bevy/blob/latest/assets/shaders/array_texture.wgsl
+// https://github.com/bevyengine/bevy/blob/741803d8c98c627a1039815931b27aef147248f9/assets/shaders/extended_material.wgsl
 
 #import bevy_pbr::mesh_functions::{get_model_matrix, mesh_position_local_to_clip}
 #import bevy_pbr::{
-	forward_io::VertexOutput,
 	mesh_view_bindings::view,
 	pbr_types::{STANDARD_MATERIAL_FLAGS_DOUBLE_SIDED_BIT, PbrInput, pbr_input_new},
 	pbr_functions as fns,
 }
 #import bevy_core_pipeline::tonemapping::tone_mapping
+#import bevy_pbr::{
+	pbr_fragment::pbr_input_from_standard_material,
+	pbr_functions::alpha_discard,
+}
+#ifdef PREPASS_PIPELINE
+#import bevy_pbr::{
+	prepass_io::{VertexOutput, FragmentOutput},
+	pbr_deferred_functions::deferred_output,
+}
+#else
+#import bevy_pbr::{
+	forward_io::{VertexOutput, FragmentOutput},
+	pbr_functions::{apply_pbr_lighting, main_pass_post_lighting_processing},
+}
+#endif
 
-@group(2) @binding(0) var my_array_texture: texture_2d_array<f32>;
-@group(2) @binding(1) var my_array_texture_sampler: sampler;
+@group(2) @binding(100) var my_array_texture: texture_2d_array<f32>;
+@group(2) @binding(101) var my_array_texture_sampler: sampler;
 
 struct Vertex {
 	@builtin(instance_index) instance_index: u32,
@@ -46,7 +60,7 @@ fn vertex(vertex: Vertex) -> CustomVertexOutput {
 	// out.normal = vertex.normal;
 	out.normal = vec3<f32>(1.0, 0.0, 0.0); // shader requires normal, but ignores it
 	out.uv = vertex.uv;
-	out.idk = u32(10);
+	out.idk = 10u;
 	out.block_id = vertex.block_id;
 	return out;
 }
@@ -55,45 +69,32 @@ fn vertex(vertex: Vertex) -> CustomVertexOutput {
 fn fragment(
 	@builtin(front_facing) is_front: bool,
 	@location(7) block_id: u32,
-	mesh: VertexOutput,
-) -> @location(0) vec4<f32> {
-	return textureSample(my_array_texture, my_array_texture_sampler, mesh.uv, i32(block_id));
+	in: VertexOutput,
+// ) -> @location(0) vec4<f32> {
+) -> FragmentOutput {
+	// generate a PbrInput struct from the StandardMaterial bindings
+	var pbr_input = pbr_input_from_standard_material(in, is_front);
 
-	// Prepare a 'processed' StandardMaterial by sampling all textures to resolve
-	// the material members
-	// var pbr_input: PbrInput = pbr_input_new();
+	// get color from array texture
+	pbr_input.material.base_color = textureSample(my_array_texture, my_array_texture_sampler, in.uv, i32(block_id));
 
-	// pbr_input.material.base_color = textureSample(my_array_texture, my_array_texture_sampler, mesh.uv, layer);
-// #ifdef VERTEX_COLORS
-// 	pbr_input.material.base_color = pbr_input.material.base_color * mesh.color;
-// #endif
+	// alpha discard
+	// pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
 
-// 	let double_sided = (pbr_input.material.flags & STANDARD_MATERIAL_FLAGS_DOUBLE_SIDED_BIT) != 0u;
+#ifdef PREPASS_PIPELINE
+	// in deferred mode we can't modify anything after that, as lighting is run in a separate fullscreen shader.
+	let out = deferred_output(in, pbr_input);
+#else
+	var out: FragmentOutput;
+	// apply lighting
+	// out.color = apply_pbr_lighting(pbr_input);
 
-// 	pbr_input.frag_coord = mesh.position;
-// 	pbr_input.world_position = mesh.world_position;
-// 	pbr_input.world_normal = fns::prepare_world_normal(
-// 		mesh.world_normal,
-// 		double_sided,
-// 		is_front,
-// 	);
+	// apply in-shader post processing (fog, alpha-premultiply, and also tonemapping, debanding if the camera is non-hdr)
+	// note this does not include fullscreen postprocessing effects like bloom.
+	// out.color = main_pass_post_lighting_processing(pbr_input, out.color);
 
-// 	pbr_input.is_orthographic = view.projection[3].w == 1.0;
+	out.color = pbr_input.material.base_color;
+#endif
 
-// 	pbr_input.N = fns::apply_normal_mapping(
-// 		pbr_input.material.flags,
-// 		mesh.world_normal,
-// 		double_sided,
-// 		is_front,
-// #ifdef VERTEX_TANGENTS
-// #ifdef STANDARD_MATERIAL_NORMAL_MAP
-// 		mesh.world_tangent,
-// #endif
-// #endif
-// 		mesh.uv,
-// 		view.mip_bias,
-// 	);
-// 	pbr_input.V = fns::calculate_view(mesh.world_position, pbr_input.is_orthographic);
-
-	// return tone_mapping(fns::apply_pbr_lighting(pbr_input), view.color_grading);
+	return out;
 }
