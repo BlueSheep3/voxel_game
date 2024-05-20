@@ -2,12 +2,22 @@
 mod array_texture_test;
 mod chunk_material;
 
-use crate::{block::BlockId, face::FaceMap, GlobalState};
-use bevy::{asset::LoadState, prelude::*};
-use serde::Deserialize;
-use std::{collections::HashMap, fs};
-
 use self::{array_texture_test::ArrayTextureTestPlugin, chunk_material::ChunkMaterialPlugin};
+use crate::{block::BlockId, face::FaceMap, GlobalState};
+use bevy::{
+	asset::LoadState,
+	prelude::*,
+	render::{
+		render_asset::RenderAssetUsages,
+		texture::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor},
+	},
+};
+use image::{imageops, DynamicImage};
+use serde::Deserialize;
+use std::{collections::HashMap, ffi::OsString, fs};
+use thiserror::Error;
+
+pub use self::chunk_material::{ChunkMaterial, ATTRIBUTE_BASE_VOXEL_INDICES};
 
 pub struct BlockModelPlugin;
 
@@ -33,9 +43,8 @@ impl Plugin for BlockModelPlugin {
 /// stores all textures in the game, so they can be used easily in a combined mesh
 #[derive(Resource, Debug, Clone)]
 pub struct GlobalTexture {
-	pub layout: TextureAtlasLayout,
 	pub image: Handle<Image>,
-	pub mappings: HashMap<BlockId, BlockModel<Rect>>,
+	pub mappings: HashMap<BlockId, BlockModel<usize>>,
 }
 
 #[derive(Asset, TypePath, Debug, Clone, Deserialize)]
@@ -86,29 +95,26 @@ fn load_images(
 ) {
 	loading_state.set(LoadingState::LoadingImages);
 
-	let block_models = get_block_models();
+	let block_models = get_block_models().unwrap();
 	for (id, block_model) in block_models {
-		// let images = block_model
-		// 	.cuboids
-		// 	.iter()
-		// 	.flat_map(|cuboid| cuboid.sides.iter())
-		// 	.map(|side| asset_server.load(format!("sprite/{}.png", side)))
-		// 	.collect::<Vec<_>>();
-
-		let model = BlockModel {
-			should_cull: block_model.should_cull,
-			cuboids: block_model
-				.cuboids
-				.iter()
-				.map(|cuboid| BlockModelCuboid {
+		let cuboids = block_model
+			.cuboids
+			.iter()
+			.map(|cuboid| {
+				let sides = cuboid
+					.sides
+					.clone()
+					.map(|side| asset_server.load(format!("sprite/{}.png", side)));
+				BlockModelCuboid {
 					min: cuboid.min,
 					max: cuboid.max,
-					sides: cuboid
-						.sides
-						.clone()
-						.map(|side| asset_server.load(format!("sprite/{}.png", side))),
-				})
-				.collect::<Vec<_>>(),
+					sides,
+				}
+			})
+			.collect::<Vec<_>>();
+		let model = BlockModel {
+			should_cull: block_model.should_cull,
+			cuboids,
 		};
 		block_images.images.insert(id, model);
 	}
@@ -142,11 +148,34 @@ fn setup_global_texture(
 	// (when reloading texture packs or something)
 	commands.remove_resource::<GlobalTexture>();
 
-	let block_models = get_block_models();
-	let mut block_model_mappings = HashMap::new();
-	let mut texture_atlas_builder = TextureAtlasBuilder::default();
-	let mut model_indeces = Vec::new();
+	let (block_textures, model_indeces) = get_texture_atlas(&block_images, &images);
+	let image = images_into_array_texture(block_textures).unwrap();
+	let image = images.add(image);
+
+	let mappings = into_block_model_mappings(model_indeces);
+
+	commands.insert_resource(GlobalTexture { image, mappings });
+
+	info!("Finished setting up global texture");
+
+	loading_state.set(LoadingState::Done);
+}
+
+// TODO use result instead of unwrap
+fn get_texture_atlas<'a, 'b>(
+	block_images: &BlockModelWithImages,
+	images: &'a Assets<Image>,
+) -> (
+	Vec<Image>,
+	Vec<(BlockId, Vec<BlockModelCuboid<usize>>, bool)>,
+)
+where
+	'a: 'b,
+{
+	let block_models = get_block_models().unwrap();
 	let mut used_paths: HashMap<String, usize> = HashMap::new();
+	let mut block_textures = Vec::new();
+	let mut model_indeces = Vec::new();
 
 	let mut index = 0;
 	for (block_id, block_model) in block_models {
@@ -162,7 +191,7 @@ fn setup_global_texture(
 				let model = block_images.images.get(&block_id).unwrap();
 				let block_image = model.cuboids[i].sides.get(face);
 				let image = images.get(block_image).unwrap();
-				texture_atlas_builder.add_texture(Some(block_image.into()), image);
+				block_textures.push(image.clone());
 				used_paths.insert(side.clone(), index);
 
 				face_indeces.push(index);
@@ -182,68 +211,95 @@ fn setup_global_texture(
 			.collect::<Vec<_>>();
 		model_indeces.push((block_id, cuboid_maps, block_model.should_cull));
 	}
+	(block_textures, model_indeces)
+}
 
-	let (layout, image) = texture_atlas_builder.finish().unwrap();
-	let image = images.add(image);
+fn into_block_model_mappings(
+	model_indeces: Vec<(BlockId, Vec<BlockModelCuboid<usize>>, bool)>,
+) -> HashMap<BlockId, BlockModel<usize>> {
+	let mut block_model_mappings = HashMap::new();
 
 	for (id, cuboid_maps, should_cull) in model_indeces {
 		let model = BlockModel {
 			should_cull,
-			cuboids: cuboid_maps
-				.iter()
-				.map(|block_model_cuboid| {
-					let min = block_model_cuboid.min;
-					let max = block_model_cuboid.max;
-					let face_maps = block_model_cuboid.sides;
-
-					let positions = face_maps.map(|i| {
-						let Rect { min, max } = layout.textures[i];
-						let size = layout.size;
-						Rect {
-							min: min / size.x,
-							max: max / size.y,
-						}
-					});
-					BlockModelCuboid {
-						min,
-						max,
-						sides: positions,
-					}
-				})
-				.collect(),
+			cuboids: cuboid_maps,
 		};
 		block_model_mappings.insert(id, model);
 	}
-
-	commands.insert_resource(GlobalTexture {
-		layout,
-		image,
-		mappings: block_model_mappings,
-	});
-
-	info!("Finished setting up global texture");
-
-	loading_state.set(LoadingState::Done);
+	block_model_mappings
 }
 
 // TODO load these with the actual asset server to allow for hot reloading
-fn get_block_models() -> Vec<(BlockId, BlockModelAsset<String>)> {
+fn get_block_models() -> Result<Vec<(BlockId, BlockModelAsset<String>)>, GlobalTextureError> {
 	let mut block_models = Vec::new();
 
-	let in_folder = fs::read_dir("assets/blockmodel").unwrap();
+	let in_folder = fs::read_dir("assets/blockmodel")?;
 	for file in in_folder {
-		let file = file.unwrap();
-		if file.file_type().unwrap().is_file() {
-			let contents = fs::read_to_string(file.path()).unwrap();
-			let block_model = ron::from_str(&contents).unwrap();
+		let file = file?;
+		if file.file_type()?.is_file() {
+			let contents = fs::read_to_string(file.path())?;
+			let block_model = ron::from_str(&contents)?;
 
 			let file_path = file.path();
-			let block_name = file_path.file_stem().unwrap().to_str().unwrap();
-			let block_id = BlockId::from_debug_name(block_name).unwrap();
+			let block_name = file_path
+				.file_stem()
+				.ok_or(GlobalTextureError::NoFileStem)?;
+			let block_name = block_name
+				.to_str()
+				.ok_or(GlobalTextureError::InvalidUtf8(block_name.to_owned()))?;
+			let block_id = BlockId::from_debug_name(block_name)
+				.ok_or(GlobalTextureError::UknownBlockName(block_name.to_owned()))?;
 
 			block_models.push((block_id, block_model));
 		}
 	}
 
-	block_models
+	Ok(block_models)
+}
+
+fn images_into_array_texture(images: Vec<Image>) -> Result<Image, GlobalTextureError> {
+	let size = images[0].size();
+	let count = images.len() as u32;
+	let mut dynamic = DynamicImage::new_rgba8(size.x, size.y * count);
+
+	for (i, image) in images.into_iter().enumerate() {
+		if image.size() != size {
+			return Err(GlobalTextureError::ImageWrongSize(size, image.size()));
+		}
+
+		let image = image
+			.try_into_dynamic()
+			.map_err(|_| GlobalTextureError::IntoDynamicImage)?;
+		let y = i as i64 * size.y as i64;
+		imageops::overlay(&mut dynamic, &image, 0, y);
+	}
+
+	let rau = RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD;
+	let mut image = Image::from_dynamic(dynamic, true, rau);
+	image.reinterpret_stacked_2d_as_array(count);
+	image.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor {
+		address_mode_u: ImageAddressMode::Repeat,
+		address_mode_v: ImageAddressMode::Repeat,
+		..default()
+	});
+
+	Ok(image)
+}
+
+#[derive(Error, Debug)]
+enum GlobalTextureError {
+	#[error("{0}")]
+	Io(#[from] std::io::Error),
+	#[error("{0}")]
+	Ron(#[from] ron::error::SpannedError),
+	#[error("couldn't convert Image into DynamicImage")]
+	IntoDynamicImage,
+	#[error("image was wrong size: should be {0}, but got {1}")]
+	ImageWrongSize(UVec2, UVec2),
+	#[error("uknown block name: {0}")]
+	UknownBlockName(String),
+	#[error("couldn't get file stem")]
+	NoFileStem,
+	#[error("invalid utf8: {0:?}")]
+	InvalidUtf8(OsString),
 }

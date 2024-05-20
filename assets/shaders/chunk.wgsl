@@ -1,7 +1,9 @@
+// FIXME draw order is incorrect
+
 // this is a modified combination of:
-// https://github.com/bevyengine/bevy/blob/latest/assets/shaders/array_texture.wgsl
-// with some vertex shader things from:
 // https://github.com/bevyengine/bevy/blob/latest/assets/shaders/custom_vertex_attribute.wgsl
+// with some fragment shader things from:
+// https://github.com/bevyengine/bevy/blob/latest/assets/shaders/array_texture.wgsl
 
 #import bevy_pbr::mesh_functions::{get_model_matrix, mesh_position_local_to_clip}
 #import bevy_pbr::{
@@ -18,7 +20,7 @@
 struct Vertex {
 	@builtin(instance_index) instance_index: u32,
 	@location(0) position: vec3<f32>,
-	@location(1) normal: vec3<f32>,
+	// @location(1) normal: vec3<f32>,
 	@location(2) uv: vec2<f32>,
 	@location(7) block_id: u32,
 };
@@ -26,7 +28,7 @@ struct Vertex {
 struct CustomVertexOutput {
 	@builtin(position) clip_position: vec4<f32>,
 	@location(0) position: vec4<f32>,
-	@location(1) normal: vec3<f32>,
+	@location(1) normal: vec3<f32>, // required, for some reason
 	@location(2) uv: vec2<f32>,
 	@location(6) idk: u32,
 	@location(7) block_id: u32,
@@ -41,7 +43,8 @@ fn vertex(vertex: Vertex) -> CustomVertexOutput {
 		vec4<f32>(vertex.position, 1.0),
 	);
 	out.position = out.clip_position;
-	out.normal = vertex.normal;
+	// out.normal = vertex.normal;
+	out.normal = vec3<f32>(1.0, 0.0, 0.0); // shader requires normal, but ignores it
 	out.uv = vertex.uv;
 	out.idk = u32(10);
 	out.block_id = vertex.block_id;

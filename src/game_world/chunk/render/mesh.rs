@@ -1,7 +1,7 @@
 use super::combine_mesh::combine_meshes;
 use crate::{
 	block::BlockId,
-	block_model::{BlockModel, BlockModelCuboid},
+	block_model::{BlockModel, BlockModelCuboid, ATTRIBUTE_BASE_VOXEL_INDICES},
 	face::{Face, FaceMap, FacesMask},
 	game_world::chunk::{Chunk, CHUNK_LENGTH},
 	pos::UVec3Utils,
@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 struct BlockMeshInfo {
 	/// the shape of the cube mesh
-	cuboid: BlockModelCuboid<Rect>,
+	cuboid: BlockModelCuboid<usize>,
 	/// which faces of the cubes should not be rendered to improve preformance
 	culled: FacesMask,
 	/// how much this block is offset from `(0,0,0)` in this chunk
@@ -24,7 +24,7 @@ struct BlockMeshInfo {
 pub fn create_chunk_mesh(
 	chunk: &Chunk,
 	neighbour_chunks: &FaceMap<Chunk>,
-	block_models: &HashMap<BlockId, BlockModel<Rect>>,
+	block_models: &HashMap<BlockId, BlockModel<usize>>,
 ) -> Mesh {
 	let meshes = chunk
 		.blocks
@@ -69,7 +69,7 @@ fn get_culled_faces_at(
 	chunk: &Chunk,
 	neighbour_chunks: &FaceMap<Chunk>,
 	pos: UVec3,
-	block_models: &HashMap<BlockId, BlockModel<Rect>>,
+	block_models: &HashMap<BlockId, BlockModel<usize>>,
 ) -> FacesMask {
 	let mut culled = FacesMask::none();
 
@@ -118,12 +118,16 @@ fn create_cube_mesh(block_mesh_info: BlockMeshInfo) -> Mesh {
 	let positions = get_cube_mesh_positions(cuboid.min, cuboid.max, offset, culled);
 	cube_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
 
-	let uvs = get_cube_mesh_uvs(&cuboid, culled);
+	// let uvs = get_cube_mesh_uvs(&cuboid, culled);
+	let uvs = get_temp_const_uvs(culled);
 	cube_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
 
 	// normals are only required for lighting and this game uses a custom lighting engine
 	// let normals = get_cube_mesh_normals();
 	// cube_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
+
+	let voxel_indices = get_cube_mesh_voxel_indices(&cuboid, culled);
+	cube_mesh.insert_attribute(ATTRIBUTE_BASE_VOXEL_INDICES, voxel_indices);
 
 	let tris = get_cube_mesh_tris(culled);
 	cube_mesh.insert_indices(Indices::U32(tris));
@@ -183,6 +187,8 @@ fn get_cube_mesh_positions(
 	positions
 }
 
+// TODO use this function for proper uvs, instead of always (0,0) to (1,1)
+#[allow(dead_code)]
 fn get_cube_mesh_uvs(block_model: &BlockModelCuboid<Rect>, culled: FacesMask) -> Vec<[f32; 2]> {
 	// Set-up UV coordinated to point to the upper (V < 0.5), "dirt+grass" part of the texture.
 	// Take a look at the custom image (assets/textures/array_texture.png)
@@ -214,6 +220,29 @@ fn get_cube_mesh_uvs(block_model: &BlockModelCuboid<Rect>, culled: FacesMask) ->
 	extend_uvs(&mut uvs, &sides, Face::Down, culled);
 	extend_uvs(&mut uvs, &sides, Face::Back, culled);
 	extend_uvs(&mut uvs, &sides, Face::Forward, culled);
+
+	uvs
+}
+
+fn get_temp_const_uvs(culled: FacesMask) -> Vec<[f32; 2]> {
+	let mut uvs = Vec::new();
+
+	fn extend_uvs(uvs: &mut Vec<[f32; 2]>, face: Face, culled: FacesMask) {
+		if culled.contains(face) {
+			return;
+		}
+		let Rect { min, max } = Rect::from_corners(Vec2::ZERO, Vec2::ONE);
+		let Vec2 { x: x0, y: y0 } = min;
+		let Vec2 { x: x1, y: y1 } = max;
+		uvs.extend([[x0, y0], [x0, y1], [x1, y1], [x1, y0]]);
+	}
+
+	extend_uvs(&mut uvs, Face::Right, culled);
+	extend_uvs(&mut uvs, Face::Left, culled);
+	extend_uvs(&mut uvs, Face::Up, culled);
+	extend_uvs(&mut uvs, Face::Down, culled);
+	extend_uvs(&mut uvs, Face::Back, culled);
+	extend_uvs(&mut uvs, Face::Forward, culled);
 
 	uvs
 }
@@ -286,4 +315,18 @@ fn get_cube_mesh_tris(culled: FacesMask) -> Vec<u32> {
 	}
 
 	vec
+}
+
+fn get_cube_mesh_voxel_indices(
+	block_model: &BlockModelCuboid<usize>,
+	culled: FacesMask,
+) -> Vec<u32> {
+	Face::all()
+		.into_iter()
+		.filter(|&face| !culled.contains(face))
+		.flat_map(|face| {
+			let voxel_index = *block_model.sides.get(face) as u32;
+			vec![voxel_index; 4]
+		})
+		.collect()
 }

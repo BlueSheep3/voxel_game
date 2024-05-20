@@ -4,7 +4,7 @@ mod mesh;
 use self::mesh::create_chunk_mesh;
 use super::ChunkUpdateEvent;
 use crate::{
-	block_model::{GlobalTexture, LoadingState},
+	block_model::{ChunkMaterial, GlobalTexture, LoadingState},
 	face::FaceMap,
 	game_world::{loading::UpdateChunkIsLoadedEvent, GameWorld},
 	pos::ChunkPos,
@@ -65,26 +65,24 @@ struct ChunkMeshEntities {
 }
 
 #[derive(Resource)]
-struct GlobalMaterial {
-	material: Handle<StandardMaterial>,
+struct GlobalChunkMaterial {
+	material: Handle<ChunkMaterial>,
 }
 
 fn has_loaded_global_material(world: &World) -> bool {
-	world.contains_resource::<GlobalMaterial>()
+	world.contains_resource::<GlobalChunkMaterial>()
 }
 
 fn setup_global_material(
 	mut commands: Commands,
 	global_texture: Res<GlobalTexture>,
-	mut materials: ResMut<Assets<StandardMaterial>>,
+	mut materials: ResMut<Assets<ChunkMaterial>>,
 ) {
-	let global_material_handle = materials.add(StandardMaterial {
-		base_color_texture: Some(global_texture.image.clone()),
-		unlit: true,
-		..default()
+	let global_material_handle = materials.add(ChunkMaterial {
+		texture: global_texture.image.clone(),
 	});
 
-	let global_material = GlobalMaterial {
+	let global_material = GlobalChunkMaterial {
 		material: global_material_handle,
 	};
 
@@ -226,7 +224,7 @@ fn create_chunk_redraw_tasks(
 fn spawn_chunk_meshes_from_tasks(
 	mut commands: Commands,
 	mut meshes: ResMut<Assets<Mesh>>,
-	global_material: Res<GlobalMaterial>,
+	global_material: Res<GlobalChunkMaterial>,
 	mut mesh_entites: ResMut<ChunkMeshEntities>,
 	mut mesh_tasks: ResMut<MeshTasks>,
 	chunk_mesh_parent: Query<Entity, With<ChunkMeshParent>>,
@@ -258,7 +256,7 @@ fn spawn_chunk_meshes_from_tasks(
 
 		let entity = commands
 			.spawn((
-				PbrBundle {
+				MaterialMeshBundle {
 					mesh: cube_mesh_handle,
 					material: global_material.material.clone(),
 					transform: Transform::from_translation(chunk_pos.to_world_pos()),

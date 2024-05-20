@@ -105,9 +105,9 @@ fn create_plane_mesh() -> Mesh {
 
 	mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, get_mesh_positions());
 	mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, get_mesh_uvs());
-	mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, get_mesh_normals());
-	mesh.insert_indices(Indices::U32(get_mesh_tris()));
+	// mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, get_mesh_normals());
 	mesh.insert_attribute(ATTRIBUTE_BASE_VOXEL_INDICES, get_mesh_voxel_indices());
+	mesh.insert_indices(Indices::U32(get_mesh_tris()));
 
 	mesh
 }
@@ -117,12 +117,12 @@ fn get_mesh_positions() -> Vec<[f32; 3]> {
 }
 
 fn get_mesh_uvs() -> Vec<[f32; 2]> {
-	vec![[0., -0.5], [2., 0.], [0., 1.], [2., 1.]]
+	vec![[0., -0.5], [2., 0.5], [0., 2.], [2., 1.]]
 }
 
-fn get_mesh_normals() -> Vec<[f32; 3]> {
-	vec![[0., 0., 1.], [0., 0., 1.], [0., 0., 1.], [0., 0., 1.]]
-}
+// fn get_mesh_normals() -> Vec<[f32; 3]> {
+// 	vec![[0., 0., 1.], [0., 0., 1.], [0., 0., 1.], [0., 0., 1.]]
+// }
 
 fn get_mesh_tris() -> Vec<u32> {
 	vec![0, 1, 2, 2, 1, 3]
