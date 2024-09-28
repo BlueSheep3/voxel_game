@@ -5,8 +5,8 @@ pub struct MainMenuPlugin;
 
 impl Plugin for MainMenuPlugin {
 	fn build(&self, app: &mut App) {
-		app.add_systems(OnEnter(GlobalState::MainMenu), setup)
-			.add_systems(OnExit(GlobalState::MainMenu), despawn_main_menu)
+		app.add_systems(OnEnter(GlobalState::MainMenu), spawn)
+			.add_systems(OnExit(GlobalState::MainMenu), despawn)
 			.add_systems(
 				Update,
 				click_start_button.run_if(in_state(GlobalState::MainMenu)),
@@ -18,9 +18,14 @@ impl Plugin for MainMenuPlugin {
 struct MainMenuRoot;
 
 #[derive(Component)]
+struct MainMenuCamera;
+
+#[derive(Component)]
 struct StartButton;
 
-fn setup(mut commands: Commands) {
+fn spawn(mut commands: Commands) {
+	commands.spawn((MainMenuCamera, Camera3dBundle::default()));
+
 	commands
 		.spawn((
 			MainMenuRoot,
@@ -48,7 +53,7 @@ fn setup(mut commands: Commands) {
 							align_items: AlignItems::Center,
 							..default()
 						},
-						background_color: Color::rgb(0.15, 0.15, 0.15).into(),
+						background_color: Color::srgb(0.15, 0.15, 0.15).into(),
 						..default()
 					},
 				))
@@ -68,9 +73,16 @@ fn setup(mut commands: Commands) {
 		});
 }
 
-fn despawn_main_menu(mut commands: Commands, query: Query<Entity, With<MainMenuRoot>>) {
+fn despawn(
+	mut commands: Commands,
+	query: Query<Entity, With<MainMenuRoot>>,
+	cams: Query<Entity, With<MainMenuCamera>>,
+) {
 	for entity in query.iter() {
 		commands.entity(entity).despawn_recursive();
+	}
+	for cam in cams.iter() {
+		commands.entity(cam).despawn();
 	}
 }
 

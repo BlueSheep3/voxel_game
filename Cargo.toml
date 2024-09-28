@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy = { version = "0.13", features = [ "serialize" ] }
+bevy = { version = "0.14", features = [ "serialize" ] }
 bitmask = "0.5"
 itertools = "0.13"
 rand = "0.8"
@@ -14,11 +14,11 @@ serde = { version = "1", features = [ "derive" ] }
 ron = "0.8"
 bincode = "1"
 noise = "0.9"
-bevy-inspector-egui = "0.24"
+bevy-inspector-egui = "0.26"
 float_next_after = "1"
-image = "0.24"
+image = "0.25"
 thiserror = "1"
-bevy_framepace = "0.16"
+bevy_framepace = "0.17"
 
 [features]
 default = [ "dynamic_linking" ]

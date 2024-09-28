@@ -3,7 +3,7 @@
 // https://github.com/bevyengine/bevy/blob/latest/assets/shaders/array_texture.wgsl
 // https://github.com/bevyengine/bevy/blob/741803d8c98c627a1039815931b27aef147248f9/assets/shaders/extended_material.wgsl
 
-#import bevy_pbr::mesh_functions::{get_model_matrix, mesh_position_local_to_clip}
+#import bevy_pbr::mesh_functions::{get_world_from_local, mesh_position_local_to_clip}
 #import bevy_core_pipeline::tonemapping::tone_mapping
 #import bevy_pbr::{
 	pbr_types::PbrInput,
@@ -43,7 +43,7 @@ struct CustomVertexOutput {
 fn vertex(vertex: Vertex) -> CustomVertexOutput {
 	var out: CustomVertexOutput;
 	out.clip_position = mesh_position_local_to_clip(
-		get_model_matrix(vertex.instance_index),
+		get_world_from_local(vertex.instance_index),
 		vec4<f32>(vertex.position, 1.0),
 	);
 	out.position = out.clip_position;

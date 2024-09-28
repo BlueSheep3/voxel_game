@@ -21,12 +21,14 @@ impl Plugin for CamPlugin {
 			Update,
 			(toggle_free_cam, toggle_can_rotate).run_if(in_state(GlobalState::InWorld)),
 		)
-		.init_state::<PlayerCamMode>()
+		.add_sub_state::<PlayerCamMode>()
+		.enable_state_scoped_entities::<PlayerCamMode>()
 		.init_state::<CanRotateCam>();
 	}
 }
 
-#[derive(States, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(SubStates, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[source(GlobalState = GlobalState::InWorld)]
 pub enum PlayerCamMode {
 	#[default]
 	FirstPerson,
@@ -36,6 +38,7 @@ pub enum PlayerCamMode {
 }
 
 // the default value is false, because you can only rotate while InWorld
+// TODO this should probably also be a substate
 #[derive(States, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CanRotateCam(pub bool);
 

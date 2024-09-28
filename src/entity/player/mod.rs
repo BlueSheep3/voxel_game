@@ -8,7 +8,10 @@ use super::{
 	movement::{Gravity, OnGround, Velocity},
 	LookDirection,
 };
-use crate::game_world::{get_height_at_with_seed, GameWorld};
+use crate::{
+	game_world::{get_height_at_with_seed, GameWorld},
+	GlobalState,
+};
 use bevy::prelude::*;
 
 pub struct PlayerPlugin;
@@ -21,7 +24,7 @@ impl Plugin for PlayerPlugin {
 			movement::MovementPlugin,
 			player_model::PlayerModelPlugin,
 		))
-		.add_systems(Startup, setup);
+		.add_systems(OnEnter(GlobalState::InWorld), setup);
 	}
 }
 

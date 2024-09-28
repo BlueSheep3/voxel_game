@@ -14,7 +14,7 @@ impl Plugin for UiPlugin {
 struct UiRoot;
 
 fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
-	let crosshair = asset_server.load("sprite/crosshair.png");
+	let crosshair = asset_server.load("sprite/Crosshair.png");
 
 	commands
 		.spawn((
@@ -38,7 +38,6 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
 						height: Val::VMin(5.0),
 						..default()
 					},
-					background_color: Color::WHITE.into(),
 					..default()
 				},
 				UiImage::new(crosshair),

@@ -37,7 +37,7 @@ use bevy::{
 };
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
-fn main() {
+fn main() -> AppExit {
 	App::new()
 		.add_plugins((
 			DefaultPlugins
@@ -69,11 +69,11 @@ fn main() {
 				finish_loading.run_if(in_state(GlobalState::Loading)),
 			),
 		)
-		.run();
+		.run()
 }
 
 #[derive(States, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
-enum GlobalState {
+pub enum GlobalState {
 	#[default]
 	Loading,
 	MainMenu,
@@ -93,6 +93,6 @@ fn finish_loading(
 
 fn close_on_q(mut quit_event: EventWriter<AppExit>, keyboard_input: Res<ButtonInput<KeyCode>>) {
 	if keyboard_input.just_pressed(KeyCode::KeyQ) {
-		quit_event.send(AppExit);
+		quit_event.send(AppExit::Success);
 	}
 }

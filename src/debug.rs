@@ -58,7 +58,7 @@ fn spawn_temp_cubes(
 					half_size: Vec3::splat(0.55),
 				})),
 				transform: Transform::from_translation(pos.to_world_pos() + 0.525),
-				material: materials.add(StandardMaterial::from(Color::rgb(0.5, 0.0, 0.5))),
+				material: materials.add(StandardMaterial::from(Color::srgb(0.5, 0.0, 0.5))),
 				..default()
 			},
 			TempCube(seconds),

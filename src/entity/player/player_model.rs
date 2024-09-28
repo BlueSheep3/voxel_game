@@ -67,5 +67,5 @@ fn draw_facing_arrow(
 	let (trans, look_dir) = player.single();
 	let eye_pos = trans.translation + Vec3::Y * super::EYE_HEIGHT;
 	let dir = look_dir.dir();
-	gizmos.arrow(eye_pos, eye_pos + dir, Color::RED);
+	gizmos.arrow(eye_pos, eye_pos + dir, Color::srgb(1., 0., 0.));
 }
