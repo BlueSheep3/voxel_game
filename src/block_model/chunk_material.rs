@@ -42,15 +42,7 @@ impl MaterialExtension for ChunkMaterial {
 		"shaders/chunk.wgsl".into()
 	}
 
-	// fn alpha_mode(&self) -> AlphaMode {
-	// 	AlphaMode::Blend
-	// }
-
 	fn specialize(
-		// _pipeline: &MaterialPipeline<Self>,
-		// descriptor: &mut RenderPipelineDescriptor,
-		// layout: &MeshVertexBufferLayout,
-		// _key: MaterialPipelineKey<Self>,
 		_pipeline: &MaterialExtensionPipeline,
 		descriptor: &mut RenderPipelineDescriptor,
 		layout: &MeshVertexBufferLayout,
@@ -58,10 +50,7 @@ impl MaterialExtension for ChunkMaterial {
 	) -> Result<(), SpecializedMeshPipelineError> {
 		let vertex_layout = layout.get_layout(&[
 			Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
-			// Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
 			Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
-			// Mesh::ATTRIBUTE_TANGENT.at_shader_location(3),
-			// Mesh::ATTRIBUTE_COLOR.at_shader_location(4),
 			ATTRIBUTE_BASE_VOXEL_INDICES.at_shader_location(7),
 		])?;
 		descriptor.vertex.buffers = vec![vertex_layout];

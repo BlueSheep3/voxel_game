@@ -64,7 +64,7 @@ fn toggle_free_cam(
 	current_cam_state: Res<State<PlayerCamMode>>,
 	mut next_cam_state: ResMut<NextState<PlayerCamMode>>,
 ) {
-	if input.just_pressed(KeyCode::F6) {
+	if input.just_pressed(KeyCode::KeyF) {
 		next_cam_state.set(match current_cam_state.get() {
 			PlayerCamMode::FirstPerson => PlayerCamMode::FreeCam,
 			PlayerCamMode::FreeCam => PlayerCamMode::FirstPerson,

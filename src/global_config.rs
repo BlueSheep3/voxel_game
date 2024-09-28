@@ -1,5 +1,6 @@
 use crate::savedata;
 use bevy::prelude::*;
+use bevy_framepace::{FramepacePlugin, FramepaceSettings, Limiter};
 use serde::{Deserialize, Serialize};
 use std::{error::Error, fs};
 
@@ -7,7 +8,9 @@ pub struct GlobalConfigPlugin;
 
 impl Plugin for GlobalConfigPlugin {
 	fn build(&self, app: &mut App) {
-		app.insert_resource(Config::load().unwrap_or_default());
+		app.insert_resource(Config::load().unwrap_or_default())
+			.add_plugins(FramepacePlugin)
+			.add_systems(Update, update_fps_limit);
 	}
 }
 
@@ -17,6 +20,8 @@ pub struct Config {
 	pub horizontal_render_distance: u32,
 	/// the radius of how many chunks to load around the player vertically
 	pub vertical_render_distance: u32,
+	/// what to limit the fps to
+	pub fps_limit: Option<f64>,
 }
 
 impl Default for Config {
@@ -24,6 +29,7 @@ impl Default for Config {
 		Self {
 			horizontal_render_distance: 3,
 			vertical_render_distance: 2,
+			fps_limit: Some(60.),
 		}
 	}
 }
@@ -34,5 +40,15 @@ impl Config {
 		let string = fs::read_to_string(path)?;
 		let controls = ron::from_str(&string)?;
 		Ok(controls)
+	}
+}
+
+fn update_fps_limit(config: Res<Config>, mut framepace: ResMut<FramepaceSettings>) {
+	if config.is_changed() {
+		if let Some(fps_limit) = config.fps_limit {
+			framepace.limiter = Limiter::from_framerate(fps_limit);
+		} else {
+			framepace.limiter = Limiter::Auto;
+		}
 	}
 }

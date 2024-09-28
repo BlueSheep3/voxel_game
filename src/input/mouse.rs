@@ -46,6 +46,8 @@ fn get_scroll_input(
 	mut mouse_scroll_events: EventReader<MouseWheel>,
 ) {
 	// FIXME this currently breaks scrolling in bevy_inspector_egui
+	// ...or i guess not?!? (it works now)
+
 	// currently ignores the scroll unit
 	for event in mouse_scroll_events.read() {
 		scroll_input.delta += event.y;

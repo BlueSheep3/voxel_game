@@ -23,6 +23,8 @@ impl Plugin for MoveAndSlidePlugin {
 	}
 }
 
+// FIXME can still sometimes walk through walls
+
 /// moves the hitbox using its velocity and
 /// slides along any blocks in the way
 fn move_and_slide(

@@ -18,6 +18,7 @@ bevy-inspector-egui = "0.24"
 float_next_after = "1"
 image = "0.24"
 thiserror = "1"
+bevy_framepace = "0.16"
 
 [features]
 default = [ "dynamic_linking" ]

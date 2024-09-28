@@ -148,11 +148,9 @@ fn setup_global_texture(
 	// (when reloading texture packs or something)
 	commands.remove_resource::<GlobalTexture>();
 
-	let (block_textures, model_indeces) = get_texture_atlas(&block_images, &images);
+	let (block_textures, mappings) = get_textures(&block_images, &images);
 	let image = images_into_array_texture(block_textures).unwrap();
 	let image = images.add(image);
-
-	let mappings = into_block_model_mappings(model_indeces);
 
 	commands.insert_resource(GlobalTexture { image, mappings });
 
@@ -162,21 +160,14 @@ fn setup_global_texture(
 }
 
 // TODO use result instead of unwrap
-// TODO seperate this function out more
-fn get_texture_atlas<'a, 'b>(
+fn get_textures(
 	block_images: &BlockModelWithImages,
-	images: &'a Assets<Image>,
-) -> (
-	Vec<Image>,
-	Vec<(BlockId, Vec<BlockModelCuboid<usize>>, bool)>,
-)
-where
-	'a: 'b,
-{
+	images: &Assets<Image>,
+) -> (Vec<Image>, HashMap<BlockId, BlockModel<usize>>) {
 	let block_models = get_block_models().unwrap();
 	let mut used_paths: HashMap<String, usize> = HashMap::new();
 	let mut block_textures = Vec::new();
-	let mut model_indeces = Vec::new();
+	let mut mappings = HashMap::new();
 
 	let mut index = 0;
 	for (block_id, block_model) in block_models {
@@ -200,34 +191,30 @@ where
 			}
 		}
 
-		let cuboid_maps = face_indeces
-			.chunks_exact(6)
-			.map(|chunk| FaceMap::try_from(chunk.to_vec()).unwrap())
-			.enumerate()
-			.map(|(i, face_maps)| BlockModelCuboid {
-				min: block_model.cuboids[i].min,
-				max: block_model.cuboids[i].max,
-				sides: face_maps,
-			})
-			.collect::<Vec<_>>();
-		model_indeces.push((block_id, cuboid_maps, block_model.should_cull));
+		let model = faces_into_model_indices(&face_indeces, &block_model);
+		mappings.insert(block_id, model);
 	}
-	(block_textures, model_indeces)
+	(block_textures, mappings)
 }
 
-fn into_block_model_mappings(
-	model_indeces: Vec<(BlockId, Vec<BlockModelCuboid<usize>>, bool)>,
-) -> HashMap<BlockId, BlockModel<usize>> {
-	let mut block_model_mappings = HashMap::new();
-
-	for (id, cuboid_maps, should_cull) in model_indeces {
-		let model = BlockModel {
-			should_cull,
-			cuboids: cuboid_maps,
-		};
-		block_model_mappings.insert(id, model);
+fn faces_into_model_indices(
+	face_indeces: &[usize],
+	block_model: &BlockModelAsset<String>,
+) -> BlockModel<usize> {
+	let cuboid_maps = face_indeces
+		.chunks_exact(6)
+		.map(|chunk| FaceMap::try_from(chunk.to_vec()).unwrap())
+		.enumerate()
+		.map(|(i, face_maps)| BlockModelCuboid {
+			min: block_model.cuboids[i].min,
+			max: block_model.cuboids[i].max,
+			sides: face_maps,
+		})
+		.collect::<Vec<_>>();
+	BlockModel {
+		should_cull: block_model.should_cull,
+		cuboids: cuboid_maps,
 	}
-	block_model_mappings
 }
 
 // TODO load these with the actual asset server to allow for hot reloading

@@ -32,7 +32,9 @@ mod pos;
 mod savedata;
 mod ui;
 
-use bevy::{app::AppExit, input::common_conditions::input_toggle_active, prelude::*};
+use bevy::{
+	app::AppExit, input::common_conditions::input_toggle_active, prelude::*, window::PresentMode,
+};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 fn main() {
@@ -42,6 +44,7 @@ fn main() {
 				.set(WindowPlugin {
 					primary_window: Some(Window {
 						title: "Voxel Game".to_owned(),
+						present_mode: PresentMode::Immediate,
 						..default()
 					}),
 					..default()
