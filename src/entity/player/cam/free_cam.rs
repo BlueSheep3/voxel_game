@@ -7,6 +7,7 @@ use crate::{
 		player::{Player, EYE_HEIGHT},
 		LookDirection,
 	},
+	global_config::Config,
 	input::{CrouchInput, InputSet, JumpInput, RotateInput, ScrollInput, WalkInput},
 	GlobalState,
 };
@@ -47,7 +48,11 @@ impl Default for FreeCamSpeed {
 	}
 }
 
-fn spawn(mut commands: Commands, player: Query<(&Transform, &LookDirection), With<Player>>) {
+fn spawn(
+	mut commands: Commands,
+	player: Query<(&Transform, &LookDirection), With<Player>>,
+	global_config: Res<Config>,
+) {
 	let (player_trans, look_dir) = player.single();
 	commands.spawn((
 		PlayerCam,
@@ -56,6 +61,10 @@ fn spawn(mut commands: Commands, player: Query<(&Transform, &LookDirection), Wit
 		Camera3dBundle {
 			transform: Transform::from_translation(player_trans.translation + Vec3::Y * EYE_HEIGHT)
 				.with_rotation(look_dir.to_quat()),
+			projection: Projection::Perspective(PerspectiveProjection {
+				fov: global_config.fov,
+				..default()
+			}),
 			..default()
 		},
 	));

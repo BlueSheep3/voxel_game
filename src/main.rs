@@ -32,6 +32,7 @@ mod pos;
 mod savedata;
 mod ui;
 
+use self::game_world::LeaveWorldEvent;
 use bevy::{
 	app::AppExit, input::common_conditions::input_toggle_active, prelude::*, window::PresentMode,
 };
@@ -66,6 +67,7 @@ fn main() -> AppExit {
 			Update,
 			(
 				close_on_q,
+				leave_world_on_p,
 				finish_loading.run_if(in_state(GlobalState::Loading)),
 			),
 		)
@@ -94,5 +96,14 @@ fn finish_loading(
 fn close_on_q(mut quit_event: EventWriter<AppExit>, keyboard_input: Res<ButtonInput<KeyCode>>) {
 	if keyboard_input.just_pressed(KeyCode::KeyQ) {
 		quit_event.send(AppExit::Success);
+	}
+}
+
+fn leave_world_on_p(
+	mut leave_event: EventWriter<LeaveWorldEvent>,
+	keyboard_input: Res<ButtonInput<KeyCode>>,
+) {
+	if keyboard_input.just_pressed(KeyCode::KeyP) {
+		leave_event.send(LeaveWorldEvent);
 	}
 }

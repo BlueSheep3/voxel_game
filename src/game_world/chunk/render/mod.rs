@@ -82,7 +82,7 @@ fn setup_global_material(
 	let global_material_handle = materials.add(ExtendedMaterial {
 		base: StandardMaterial {
 			unlit: true,
-			..Default::default()
+			..default()
 		},
 		extension: ChunkMaterial {
 			texture: global_texture.image.clone(),
@@ -106,10 +106,19 @@ fn init(mut commands: Commands) {
 	));
 }
 
-fn cleanup(mut commands: Commands, chunk_mesh_parent: Query<Entity, With<ChunkMeshParent>>) {
+fn cleanup(
+	mut commands: Commands,
+	chunk_mesh_parent: Query<Entity, With<ChunkMeshParent>>,
+	mut mesh_entites: ResMut<ChunkMeshEntities>,
+	mut queued_chunk_redraws: ResMut<QueuedChunkRedraws>,
+	mut mesh_tasks: ResMut<MeshTasks>,
+) {
 	if let Ok(chunk_mesh_parent) = chunk_mesh_parent.get_single() {
 		commands.entity(chunk_mesh_parent).despawn_recursive();
 	}
+	*mesh_entites = default();
+	*queued_chunk_redraws = default();
+	*mesh_tasks = default();
 }
 
 /// queues the chunks that are currently being loaded into the render distance

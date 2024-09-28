@@ -24,7 +24,8 @@ impl Plugin for PlayerPlugin {
 			movement::MovementPlugin,
 			player_model::PlayerModelPlugin,
 		))
-		.add_systems(OnEnter(GlobalState::InWorld), setup);
+		.add_systems(OnEnter(GlobalState::InWorld), spawn)
+		.add_systems(OnExit(GlobalState::InWorld), despawn);
 	}
 }
 
@@ -65,10 +66,16 @@ impl Default for PlayerBundle {
 	}
 }
 
-fn setup(mut commands: Commands, game_world: Res<GameWorld>) {
+fn spawn(mut commands: Commands, game_world: Res<GameWorld>) {
 	let height = get_height_at_with_seed(16, 16, game_world.seed) as f32 + 4.;
 	commands.spawn(PlayerBundle {
 		transform: Transform::from_xyz(16.5, height, 16.5),
 		..default()
 	});
+}
+
+fn despawn(mut commands: Commands, players: Query<Entity, With<Player>>) {
+	for player in players.iter() {
+		commands.entity(player).despawn();
+	}
 }

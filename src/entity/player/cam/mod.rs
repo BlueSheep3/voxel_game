@@ -14,7 +14,6 @@ impl Plugin for CamPlugin {
 		))
 		// TODO show cursor when opening inventory and other things
 		.add_systems(OnEnter(GlobalState::InWorld), init)
-		.add_systems(OnExit(GlobalState::InWorld), cleanup)
 		.add_systems(OnEnter(CanRotateCam(true)), hide_cursor)
 		.add_systems(OnExit(CanRotateCam(true)), show_cursor)
 		.add_systems(
@@ -22,8 +21,7 @@ impl Plugin for CamPlugin {
 			(toggle_free_cam, toggle_can_rotate).run_if(in_state(GlobalState::InWorld)),
 		)
 		.add_sub_state::<PlayerCamMode>()
-		.enable_state_scoped_entities::<PlayerCamMode>()
-		.init_state::<CanRotateCam>();
+		.add_sub_state::<CanRotateCam>();
 	}
 }
 
@@ -37,9 +35,8 @@ pub enum PlayerCamMode {
 	FreeCam,
 }
 
-// the default value is false, because you can only rotate while InWorld
-// TODO this should probably also be a substate
-#[derive(States, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(SubStates, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[source(GlobalState = GlobalState::InWorld)]
 pub struct CanRotateCam(pub bool);
 
 // FIXME for some reason, the player camera moves faster during lag
@@ -56,10 +53,6 @@ fn init(
 ) {
 	cam_mode.set(PlayerCamMode::default());
 	can_rotate.set(CanRotateCam(true));
-}
-
-fn cleanup(mut can_rotate: ResMut<NextState<CanRotateCam>>) {
-	can_rotate.set(CanRotateCam(false));
 }
 
 fn toggle_free_cam(

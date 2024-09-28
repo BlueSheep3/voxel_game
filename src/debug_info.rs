@@ -9,14 +9,10 @@ pub struct DebugInfoPlugin;
 
 impl Plugin for DebugInfoPlugin {
 	fn build(&self, app: &mut App) {
-		app.init_state::<DebugInfoEnabled>()
+		app.add_sub_state::<DebugInfoEnabled>()
 			.add_systems(
 				Update,
 				try_toggle_debug_info.run_if(in_state(GlobalState::InWorld)),
-			)
-			.add_systems(
-				OnExit(GlobalState::InWorld),
-				disable_debug_info.run_if(in_state(DebugInfoEnabled(true))),
 			)
 			.add_systems(OnEnter(DebugInfoEnabled(true)), spawn_debug_info_text)
 			.add_systems(OnExit(DebugInfoEnabled(true)), despawn_debug_info_text)
@@ -30,7 +26,8 @@ impl Plugin for DebugInfoPlugin {
 #[derive(Component)]
 struct DebugInfoText;
 
-#[derive(States, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(SubStates, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[source(GlobalState = GlobalState::InWorld)]
 struct DebugInfoEnabled(bool);
 
 fn try_toggle_debug_info(
@@ -41,10 +38,6 @@ fn try_toggle_debug_info(
 	if input.just_pressed(KeyCode::F3) {
 		next_state.set(DebugInfoEnabled(!state.0));
 	}
-}
-
-fn disable_debug_info(mut next_state: ResMut<NextState<DebugInfoEnabled>>) {
-	next_state.set(DebugInfoEnabled(false));
 }
 
 fn spawn_debug_info_text(mut commands: Commands) {

@@ -1,4 +1,4 @@
-use crate::GlobalState;
+use crate::{game_world::JoinWorldEvent, GlobalState};
 use bevy::prelude::*;
 
 pub struct MainMenuPlugin;
@@ -87,13 +87,12 @@ fn despawn(
 }
 
 fn click_start_button(
-	mut global_state: ResMut<NextState<GlobalState>>,
+	mut join_event: EventWriter<JoinWorldEvent>,
 	intercation_query: Query<&Interaction, (Changed<Interaction>, With<StartButton>)>,
 ) {
 	for interaction in intercation_query.iter() {
 		if interaction == &Interaction::Pressed {
-			global_state.set(GlobalState::InWorld);
-			info!("started game");
+			join_event.send(JoinWorldEvent);
 		}
 	}
 }

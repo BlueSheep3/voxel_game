@@ -2,7 +2,7 @@ use crate::savedata;
 use bevy::prelude::*;
 use bevy_framepace::{FramepacePlugin, FramepaceSettings, Limiter};
 use serde::{Deserialize, Serialize};
-use std::{error::Error, fs};
+use std::{error::Error, f32::consts::TAU, fs};
 
 pub struct GlobalConfigPlugin;
 
@@ -22,6 +22,8 @@ pub struct Config {
 	pub vertical_render_distance: u32,
 	/// what to limit the fps to
 	pub fps_limit: Option<f64>,
+	/// the field of view of the player camera
+	pub fov: f32,
 }
 
 impl Default for Config {
@@ -30,6 +32,7 @@ impl Default for Config {
 			horizontal_render_distance: 3,
 			vertical_render_distance: 2,
 			fps_limit: Some(60.),
+			fov: TAU / 8.,
 		}
 	}
 }

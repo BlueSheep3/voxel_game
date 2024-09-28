@@ -24,7 +24,7 @@ pub struct BlockModelPlugin;
 impl Plugin for BlockModelPlugin {
 	fn build(&self, app: &mut App) {
 		app.add_plugins((ChunkMaterialPlugin, WireframeRenderingPlugin))
-			.init_state::<LoadingState>()
+			.add_sub_state::<LoadingState>()
 			.insert_resource(BlockModelWithImages::default())
 			.add_systems(OnEnter(GlobalState::Loading), load_images)
 			.add_systems(
@@ -75,7 +75,8 @@ pub struct BlockModelCuboid<Side> {
 	pub sides: FaceMap<Side>,
 }
 
-#[derive(States, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(SubStates, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[source(GlobalState = GlobalState::Loading)]
 pub enum LoadingState {
 	#[default]
 	LoadingImages,
