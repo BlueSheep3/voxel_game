@@ -3,7 +3,12 @@
 
 pub mod worldgen;
 
-use super::{chunk::IsLoaded, GameWorld};
+use self::worldgen::{continue_generation_of_chunk, fully_generate_chunk};
+
+use super::{
+	chunk::{GenerationStage, IsLoaded},
+	GameWorld,
+};
 use crate::{
 	entity::player::Player,
 	global_config,
@@ -75,16 +80,19 @@ fn load_chunks(
 	};
 
 	let loaded;
-	if let Some(chunk) = game_world.chunks.get_mut(&pos) {
+	if let Some(chunk) = game_world.chunks.get(&pos) {
 		if chunk.loaded.is_simple_loaded() {
 			return;
 		}
+		if chunk.generation_state != GenerationStage::COMPLETE {
+			continue_generation_of_chunk(&mut game_world, pos);
+		}
+		let chunk = game_world.chunks.get_mut(&pos).unwrap();
 		chunk.loaded.set_simple_loaded(true);
 		loaded = chunk.loaded;
 	} else {
-		let chunk = worldgen::generate_chunk(pos, game_world.seed, IsLoaded::SIMPLE_LOADED);
-		loaded = chunk.loaded;
-		game_world.chunks.insert(pos, chunk);
+		fully_generate_chunk(&mut game_world, pos, IsLoaded::SIMPLE_LOADED);
+		loaded = game_world.chunks.get(&pos).unwrap().loaded;
 	}
 
 	events.send(UpdateChunkIsLoadedEvent {

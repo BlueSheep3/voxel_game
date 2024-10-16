@@ -1,0 +1,17 @@
+(
+	should_cull: true,
+	cuboids: [
+		(
+			min: ( 0.0, 0.0, 0.0 ),
+			max: ( 1.0, 1.0, 1.0 ),
+			sides: ((
+				"Leaves",
+				"Leaves",
+				"Leaves",
+				"Leaves",
+				"Leaves",
+				"Leaves",
+			)),
+		),
+	],
+)

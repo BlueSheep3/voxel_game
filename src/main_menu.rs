@@ -1,4 +1,7 @@
-use crate::{game_world::JoinWorldEvent, GlobalState};
+use crate::{
+	game_world::{JoinWorldEvent, NewWorldEvent},
+	GlobalState,
+};
 use bevy::prelude::*;
 
 pub struct MainMenuPlugin;
@@ -9,7 +12,8 @@ impl Plugin for MainMenuPlugin {
 			.add_systems(OnExit(GlobalState::MainMenu), despawn)
 			.add_systems(
 				Update,
-				click_start_button.run_if(in_state(GlobalState::MainMenu)),
+				(click_new_world_button, click_start_button)
+					.run_if(in_state(GlobalState::MainMenu)),
 			);
 	}
 }
@@ -22,6 +26,9 @@ struct MainMenuCamera;
 
 #[derive(Component)]
 struct StartButton;
+
+#[derive(Component)]
+struct NewWorldButton;
 
 fn spawn(mut commands: Commands) {
 	commands.spawn((MainMenuCamera, Camera3dBundle::default()));
@@ -44,11 +51,41 @@ fn spawn(mut commands: Commands) {
 		.with_children(|parent| {
 			parent
 				.spawn((
+					NewWorldButton,
+					ButtonBundle {
+						style: Style {
+							width: Val::VMin(20.),
+							height: Val::VMin(10.),
+							margin: UiRect::all(Val::VMin(1.)),
+							justify_content: JustifyContent::Center,
+							align_items: AlignItems::Center,
+							..default()
+						},
+						background_color: Color::srgb(0.15, 0.15, 0.15).into(),
+						..default()
+					},
+				))
+				.with_children(|parent| {
+					parent.spawn(TextBundle {
+						text: Text::from_section(
+							"New World",
+							TextStyle {
+								color: Color::WHITE,
+								font_size: 20.,
+								..default()
+							},
+						),
+						..default()
+					});
+				});
+			parent
+				.spawn((
 					StartButton,
 					ButtonBundle {
 						style: Style {
 							width: Val::VMin(20.),
 							height: Val::VMin(10.),
+							margin: UiRect::all(Val::VMin(1.)),
 							justify_content: JustifyContent::Center,
 							align_items: AlignItems::Center,
 							..default()
@@ -83,6 +120,17 @@ fn despawn(
 	}
 	for cam in cams.iter() {
 		commands.entity(cam).despawn();
+	}
+}
+
+fn click_new_world_button(
+	mut join_event: EventWriter<NewWorldEvent>,
+	intercation_query: Query<&Interaction, (Changed<Interaction>, With<NewWorldButton>)>,
+) {
+	for interaction in intercation_query.iter() {
+		if interaction == &Interaction::Pressed {
+			join_event.send(NewWorldEvent);
+		}
 	}
 }
 

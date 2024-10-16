@@ -20,17 +20,21 @@ pub struct GameWorldPlugin;
 impl Plugin for GameWorldPlugin {
 	fn build(&self, app: &mut App) {
 		app.add_plugins((chunk::ChunkPlugin, loading::LoadingPlugin))
+			.add_event::<NewWorldEvent>()
 			.add_event::<JoinWorldEvent>()
 			.add_event::<LeaveWorldEvent>()
 			.add_systems(
 				Update,
 				(
 					(save_game_world, leave_game_world).run_if(in_state(GlobalState::InWorld)),
-					join_game_world.run_if(in_state(GlobalState::MainMenu)),
+					(new_game_world, join_game_world).run_if(in_state(GlobalState::MainMenu)),
 				),
 			);
 	}
 }
+
+#[derive(Event)]
+pub struct NewWorldEvent;
 
 #[derive(Event)]
 pub struct JoinWorldEvent;
@@ -50,6 +54,17 @@ pub struct GameWorld {
 fn save_game_world(input: Res<ButtonInput<KeyCode>>, game_world: Res<GameWorld>) {
 	if input.just_pressed(KeyCode::KeyO) {
 		savedata::save_game_world("debug_world", &game_world).unwrap();
+	}
+}
+
+fn new_game_world(
+	mut events: EventReader<NewWorldEvent>,
+	mut commands: Commands,
+	mut global_state: ResMut<NextState<GlobalState>>,
+) {
+	for _ in events.read() {
+		commands.insert_resource(GameWorld::default());
+		global_state.set(GlobalState::InWorld);
 	}
 }
 

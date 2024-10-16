@@ -98,24 +98,29 @@ fn place_block(
 }
 
 fn select_current_block(input: Res<ButtonInput<KeyCode>>, mut current_block: ResMut<CurrentBlock>) {
-	if input.just_pressed(KeyCode::Digit1) {
-		current_block.block = Stone::BLOCK;
+	macro_rules! blocks {
+		($key0:ident, $block0:ident; $($key:ident, $block:ident);* $(;)?) => {
+			if input.just_pressed(KeyCode::$key0) {
+				current_block.block = $block0::BLOCK;
+			}
+			$(
+				else if input.just_pressed(KeyCode::$key) {
+					current_block.block = $block::BLOCK;
+				}
+			)*
+		};
 	}
-	if input.just_pressed(KeyCode::Digit2) {
-		current_block.block = GrassBlock::BLOCK;
-	}
-	if input.just_pressed(KeyCode::Digit3) {
-		current_block.block = Dirt::BLOCK;
-	}
-	if input.just_pressed(KeyCode::Digit4) {
-		current_block.block = Cobblestone::BLOCK;
-	}
-	if input.just_pressed(KeyCode::Digit5) {
-		current_block.block = DebugBlock::BLOCK;
-	}
-	if input.just_pressed(KeyCode::Digit6) {
-		current_block.block = DebugSlab::BLOCK;
-	}
+	blocks![
+		Digit1, Stone;
+		Digit2, GrassBlock;
+		Digit3, Dirt;
+		Digit4, Cobblestone;
+		Digit5, DebugBlock;
+		Digit6, DebugSlab;
+		Digit7, Log;
+		Digit8, Planks;
+		Digit9, Leaves;
+	];
 }
 
 fn send_block_update(block_pos: BlockPos, chunk_updates: &mut EventWriter<ChunkUpdateEvent>) {

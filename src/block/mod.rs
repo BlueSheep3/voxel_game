@@ -51,6 +51,9 @@ impl BlockId {
 			"Cobblestone" => Some(Cobblestone::BLOCK_ID),
 			"DebugBlock" => Some(DebugBlock::BLOCK_ID),
 			"DebugSlab" => Some(DebugSlab::BLOCK_ID),
+			"Log" => Some(Log::BLOCK_ID),
+			"Planks" => Some(Planks::BLOCK_ID),
+			"Leaves" => Some(Leaves::BLOCK_ID),
 			_ => None,
 		}
 	}

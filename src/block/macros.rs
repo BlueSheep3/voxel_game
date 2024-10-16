@@ -23,6 +23,9 @@ macro_rules! match_block_id {
 			dirt::Dirt,
 			cobblestone::Cobblestone,
 			grass_block::GrassBlock,
+			log::Log,
+			planks::Planks,
+			leaves::Leaves,
 			debug_block::DebugBlock,
 			debug_slab::DebugSlab,
 		}
