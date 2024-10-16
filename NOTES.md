@@ -1,3 +1,9 @@
+# todo
+
+- custom schedule for update in state
+- state scoped resources
+
+
 # Debug Features / QOL
 
 - flying without freecam

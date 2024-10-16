@@ -10,13 +10,14 @@ use bevy::{
 
 use crate::block_model::ATTRIBUTE_BASE_VOXEL_INDICES;
 
-// PERF combine meshes immedeatly instead of first collecting
-// them into a vec to only allocate each mesh once
+// NOTE you cannot replace this function with Mesh::merge,
+// because it seems to have some problems with the "Vertex_Position".
+// (last tested: 2024-09-28, bevy version: 0.14.2)
 
 // this functions entire code is copied from:
 // https://gist.github.com/DGriffin91/e63e5f7a90b633250c2cf4bf8fd61ef8
 // and then modified to only include necessary things
-pub fn combine_meshes(meshes: &[Mesh]) -> Mesh {
+pub fn combine_meshes(meshes: impl Iterator<Item = Mesh>) -> Mesh {
 	let mut mesh = Mesh::new(
 		PrimitiveTopology::TriangleList,
 		RenderAssetUsages::default(),

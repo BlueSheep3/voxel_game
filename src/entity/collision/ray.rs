@@ -139,7 +139,7 @@ fn get_first_ray_intersection(ray: FiniteRay, cuboid: Cuboid) -> Option<(Vec3, F
 /// the information you get when sending a Ray
 #[derive(Debug, Clone, Copy)]
 pub struct RayHitInfo {
-	pub pos: Vec3,
+	pub _pos: Vec3,
 	pub block_pos: BlockPos,
 	pub face: Face,
 }
@@ -155,7 +155,7 @@ pub fn send_out_ray(ray: FiniteRay, game_world: &GameWorld) -> Option<RayHitInfo
 			let block_outline = block_outline + block_pos.to_world_pos();
 			if let Some((pos, face)) = get_first_ray_intersection(ray, block_outline) {
 				return Some(RayHitInfo {
-					pos,
+					_pos: pos,
 					block_pos,
 					face,
 				});

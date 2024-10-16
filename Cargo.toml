@@ -3,8 +3,6 @@ name = "voxel_game"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 bevy = { version = "0.14", features = [ "serialize" ] }
 bitmask = "0.5"
@@ -14,7 +12,7 @@ serde = { version = "1", features = [ "derive" ] }
 ron = "0.8"
 bincode = "1"
 noise = "0.9"
-bevy-inspector-egui = "0.26"
+bevy-inspector-egui = "0.27"
 float_next_after = "1"
 image = "0.25"
 thiserror = "1"

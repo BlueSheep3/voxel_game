@@ -59,10 +59,9 @@ pub fn create_chunk_mesh(
 			};
 			let mesh = create_cube_mesh(info);
 			Some(mesh)
-		})
-		.collect::<Vec<_>>();
+		});
 
-	combine_meshes(&meshes)
+	combine_meshes(meshes)
 }
 
 fn get_culled_faces_at(
