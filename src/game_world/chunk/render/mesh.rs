@@ -4,7 +4,7 @@ use crate::{
 	block_model::{BlockModel, BlockModelCuboid, ATTRIBUTE_BASE_VOXEL_INDICES},
 	face::{Face, FaceMap, FacesMask},
 	game_world::chunk::{Chunk, CHUNK_LENGTH},
-	pos::UVec3Utils,
+	pos::BlockInChunkPos,
 };
 use bevy::{
 	prelude::*,
@@ -18,7 +18,7 @@ struct BlockMeshInfo {
 	/// which faces of the cubes should not be rendered to improve preformance
 	culled: FacesMask,
 	/// how much this block is offset from `(0,0,0)` in this chunk
-	pos: UVec3,
+	pos: BlockInChunkPos,
 }
 
 pub fn create_chunk_mesh(
@@ -67,24 +67,24 @@ pub fn create_chunk_mesh(
 fn get_culled_faces_at(
 	chunk: &Chunk,
 	neighbour_chunks: &FaceMap<Chunk>,
-	pos: UVec3,
+	pos: BlockInChunkPos,
 	block_models: &HashMap<BlockId, BlockModel<usize>>,
 ) -> FacesMask {
 	let mut culled = FacesMask::none();
 
 	macro_rules! cull {
 		($axis:ident, $offset:expr, $face:ident, [$border:expr, $other_border:expr]) => {
-			if pos.$axis == $border as u32 {
+			if pos.$axis == $border as u8 {
 				let chunk = neighbour_chunks.get(Face::$face);
 				let mut adjacent_pos = pos;
-				adjacent_pos.$axis = $other_border as u32;
+				adjacent_pos.$axis = $other_border as u8;
 				let model = block_models.get(&chunk.blocks[adjacent_pos].id).unwrap();
 				if model.should_cull {
 					culled.set(Face::$face);
 				}
 			} else {
-				let pos = IVec3::try_from(pos).unwrap() + $offset;
-				let pos: UVec3 = pos.try_into().unwrap();
+				let pos = IVec3::from(pos) + $offset;
+				let pos: BlockInChunkPos = pos.try_into().unwrap();
 				let model = block_models.get(&chunk.blocks[pos].id).unwrap();
 				if model.should_cull {
 					culled.set(Face::$face);
@@ -137,7 +137,7 @@ fn create_cube_mesh(block_mesh_info: BlockMeshInfo) -> Mesh {
 fn get_cube_mesh_positions(
 	min: Vec3,
 	max: Vec3,
-	offset: UVec3,
+	offset: BlockInChunkPos,
 	culled: FacesMask,
 ) -> Vec<[f32; 3]> {
 	macro_rules! ignore_culled {
@@ -146,9 +146,9 @@ fn get_cube_mesh_positions(
 			$(
 				if !$culled.contains(Face::$face) {
 					vec.extend([$([
-						num_to_main_max!($x, x),
-						num_to_main_max!($y, y),
-						num_to_main_max!($z, z),
+						num_to_min_max!($x, x),
+						num_to_min_max!($y, y),
+						num_to_min_max!($z, z),
 					]),*]);
 				}
 			)*
@@ -156,7 +156,7 @@ fn get_cube_mesh_positions(
 		}};
 	}
 
-	macro_rules! num_to_main_max {
+	macro_rules! num_to_min_max {
 		(0, $axis:ident) => {
 			min.$axis
 		};
@@ -175,7 +175,7 @@ fn get_cube_mesh_positions(
 		(Forward, [1, 1, 0], [1, 0, 0], [0, 0, 0], [0, 1, 0]);
 	};
 
-	let offset = offset.to_vec3();
+	let offset = Vec3::from(offset);
 
 	for [x, y, z] in &mut positions {
 		*x += offset.x;

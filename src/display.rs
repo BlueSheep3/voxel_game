@@ -6,32 +6,32 @@ use std::fmt::{self, Debug, Display};
 
 impl Display for ChunkPos {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "[{}, {}, {}]", self.0.x, self.0.y, self.0.z)
+		write!(f, "[{}, {}, {}]", self.x, self.y, self.z)
 	}
 }
 
 impl Debug for ChunkPos {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_tuple(stringify!(ChunkPos))
-			.field(&self.0.x)
-			.field(&self.0.y)
-			.field(&self.0.z)
+			.field(&self.x)
+			.field(&self.y)
+			.field(&self.z)
 			.finish()
 	}
 }
 
 impl Display for BlockPos {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "[{}, {}, {}]", self.0.x, self.0.y, self.0.z)
+		write!(f, "[{}, {}, {}]", self.x, self.y, self.z)
 	}
 }
 
 impl Debug for BlockPos {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_tuple(stringify!(BlockPos))
-			.field(&self.0.x)
-			.field(&self.0.y)
-			.field(&self.0.z)
+			.field(&self.x)
+			.field(&self.y)
+			.field(&self.z)
 			.finish()
 	}
 }

@@ -85,7 +85,7 @@ fn place_block(
 	let ray = FiniteRay::new(eye_pos, dir, 10.0);
 
 	if let Some(hit) = send_out_ray(ray, &game_world) {
-		let block_pos = BlockPos(hit.block_pos.0 + hit.face.normal());
+		let block_pos = hit.block_pos + hit.face.normal();
 
 		if let Some(block) = game_world.get_block_at_mut(block_pos) {
 			if !block.is_replacable() {

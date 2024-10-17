@@ -4,7 +4,7 @@ use crate::{
 		chunk::{Chunk, GenerationStage, IsLoaded, CHUNK_LENGTH},
 		GameWorld,
 	},
-	pos::{BlockPos, ChunkPos},
+	pos::{BlockInChunkPos, BlockPos, ChunkPos},
 };
 use bevy::math::IVec3;
 use rand::{prelude::StdRng, Rng, SeedableRng};
@@ -12,8 +12,8 @@ use rand::{prelude::StdRng, Rng, SeedableRng};
 pub fn generate_trees(world: &mut GameWorld, chunk_pos: ChunkPos) {
 	// TODO generate multiple trees instead of just one
 
-	let x = get_random(chunk_pos.to_block_pos(), 7832957017391).gen_range(0..CHUNK_LENGTH);
-	let z = get_random(chunk_pos.to_block_pos(), 9870402726984).gen_range(0..CHUNK_LENGTH);
+	let x = get_random(chunk_pos.to_block_pos(), 7832957017391).gen_range(0..CHUNK_LENGTH as u8);
+	let z = get_random(chunk_pos.to_block_pos(), 9870402726984).gen_range(0..CHUNK_LENGTH as u8);
 	let Some(chunk) = world.chunks.get_mut(&chunk_pos) else {
 		bevy::log::error!(
 			"trying to generate trees in a chunk that doesnt exist (at {})",
@@ -73,22 +73,18 @@ fn place_block_at(world: &mut GameWorld, block_pos: BlockPos, new_block: Block) 
 }
 
 fn get_random(block_pos: BlockPos, salt: u64) -> StdRng {
-	let [x, y, z] = [
-		block_pos.0.x as u64,
-		block_pos.0.y as u64,
-		block_pos.0.z as u64,
-	];
+	let [x, y, z] = [block_pos.x as u64, block_pos.y as u64, block_pos.z as u64];
 	let seed = x.wrapping_add(y << 6).wrapping_add(z << 12);
 	let seed = seed.wrapping_add(salt);
 	StdRng::seed_from_u64(seed)
 }
 
 // coordinates are relative to chunk
-fn find_y_of_grass_block(x: usize, z: usize, chunk: &Chunk) -> Option<usize> {
+fn find_y_of_grass_block(x: u8, z: u8, chunk: &Chunk) -> Option<u8> {
 	// maybe this should just use the same height map as terrain gen?
 
-	for y in 0..CHUNK_LENGTH {
-		let pos = [x, y, z];
+	for y in 0..CHUNK_LENGTH as u8 {
+		let pos = BlockInChunkPos::new(x, y, z);
 		if chunk.blocks[pos] == GrassBlock::BLOCK {
 			return Some(y);
 		}

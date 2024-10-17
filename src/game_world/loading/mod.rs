@@ -196,15 +196,15 @@ fn chunk_pos_in_render_distance(player_pos: Vec3, render_distance: (u32, u32)) -
 	let range = |offset, rd| (offset - rd)..=(offset + rd);
 	let current_chunk = player_pos.to_chunk_pos();
 
-	for x in range(current_chunk.0.x, rdh) {
-		for y in range(current_chunk.0.y, rdv) {
-			for z in range(current_chunk.0.z, rdh) {
+	for x in range(current_chunk.x, rdh) {
+		for y in range(current_chunk.y, rdv) {
+			for z in range(current_chunk.z, rdh) {
 				chunk_pos_to_load.push(ChunkPos::new(x, y, z));
 			}
 		}
 	}
 
-	chunk_pos_to_load.sort_by_key(|pos| pos.0.distance_squared(current_chunk.0));
+	chunk_pos_to_load.sort_by_key(|pos| pos.distance_squared(current_chunk));
 
 	chunk_pos_to_load
 }

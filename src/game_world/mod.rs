@@ -1,10 +1,7 @@
 pub mod chunk;
 mod loading;
 
-use self::{
-	chunk::{Chunk, CHUNK_LENGTH},
-	loading::worldgen,
-};
+use self::{chunk::Chunk, loading::worldgen};
 use crate::{
 	block::Block,
 	pos::{BlockPos, ChunkPos, Vec3Utils},
@@ -107,16 +104,14 @@ impl GameWorld {
 	pub fn get_block_at(&self, pos: BlockPos) -> Option<&Block> {
 		let chunk_pos = pos.to_chunk_pos();
 		let chunk = self.chunks.get(&chunk_pos)?;
-		let IVec3 { x, y, z } = pos.0.rem_euclid(IVec3::splat(CHUNK_LENGTH as i32));
-		let [x, y, z] = [x as usize, y as usize, z as usize];
-		Some(&chunk.blocks[[x, y, z]])
+		let pos = pos.to_block_in_chunk_pos();
+		Some(&chunk.blocks[pos])
 	}
 
 	pub fn get_block_at_mut(&mut self, pos: BlockPos) -> Option<&mut Block> {
 		let chunk_pos = pos.to_chunk_pos();
 		let chunk = self.chunks.get_mut(&chunk_pos)?;
-		let IVec3 { x, y, z } = pos.0.rem_euclid(IVec3::splat(CHUNK_LENGTH as i32));
-		let [x, y, z] = [x as usize, y as usize, z as usize];
-		Some(&mut chunk.blocks[[x, y, z]])
+		let pos = pos.to_block_in_chunk_pos();
+		Some(&mut chunk.blocks[pos])
 	}
 }

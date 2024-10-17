@@ -69,15 +69,15 @@ pub fn get_all_block_pos_in_ray(ray: FiniteRay) -> Vec<BlockPos> {
 
 		match_min! {
 			max.x => {
-				current.0.x += step.x;
+				current.x += step.x;
 				max.x += delta.x;
 			}
 			max.y => {
-				current.0.y += step.y;
+				current.y += step.y;
 				max.y += delta.y;
 			}
 			max.z => {
-				current.0.z += step.z;
+				current.z += step.z;
 				max.z += delta.z;
 			}
 		}
