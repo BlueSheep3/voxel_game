@@ -1,11 +1,17 @@
-//! a voxel game / minecraft clone (Bevy 0.13)<br>
-//! just for fun and testing out bevy's features<br>
-//! also my first 3D Bevy game
-
+#![doc = include_str!("../README.md")]
 #![allow(clippy::needless_pass_by_value)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![deny(clippy::missing_safety_doc)]
 #![deny(clippy::undocumented_unsafe_blocks)]
+#![deny(clippy::multiple_unsafe_ops_per_block)]
+#![warn(clippy::collection_is_never_read)]
+#![warn(clippy::use_self)]
+#![warn(clippy::explicit_iter_loop)]
+#![warn(clippy::suspicious_operation_groupings)]
+#![warn(clippy::wildcard_imports)]
+#![warn(clippy::enum_glob_use)]
+#![warn(clippy::infinite_loop)]
+#![warn(clippy::suspicious_to_owned)]
 
 #[cfg(all(not(debug_assertions), feature = "dynamic_linking"))]
 compile_error!("can't compile with dynamic linking in release mode");

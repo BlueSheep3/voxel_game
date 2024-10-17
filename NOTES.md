@@ -1,9 +1,3 @@
-# todo
-
-- custom schedule for update in state
-- state scoped resources
-
-
 # Debug Features / QOL
 
 - flying without freecam
@@ -25,13 +19,26 @@
 - combining slabs
 
 
+# Collision
+
+- sliding off the corner of blocks sometimes will keep sliding even after the block
+- can maybe still walk through walls (needs more testing)
+
+
 # Performance / Optimization
 
-- combine adjacent faces with same texture into one quad
-- remove unused block texture assets after cloning them into the texture atlas
+- greedy meshing: combine adjacent faces with same texture into one quad
+  - need to first set chunk length to 30
+- remove unused block texture assets after cloning them into the global array texture
 
 
 # Input
 
 - input system that allows customizing between keyboard and mouse better
 - create new input types more easily
+
+
+# Other
+
+- custom schedule for update in state
+- state scoped resources
