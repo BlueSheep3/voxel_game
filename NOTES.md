@@ -30,6 +30,7 @@
 - greedy meshing: combine adjacent faces with same texture into one quad
   - need to first set chunk length to 30
 - remove unused block texture assets after cloning them into the global array texture
+- dont clone as much data of adjacent chunks to the async task for generating a chunk mesh
 
 
 # Input

@@ -29,7 +29,6 @@ impl Plugin for PlayerPlugin {
 	}
 }
 
-const GRAVITY: f32 = -20.0;
 const WIDTH: f32 = 0.8;
 const HEIGHT: f32 = 1.85;
 const EYE_HEIGHT: f32 = 1.65;
@@ -57,7 +56,7 @@ impl Default for PlayerBundle {
 			player: Player,
 			transform: Transform::default(),
 			velocity: Velocity::default(),
-			gravity: Gravity::vertical(GRAVITY),
+			gravity: Gravity::vertical(movement::GRAVITY),
 			look_direction: LookDirection::default(),
 			collider: BoxCollider::new(WIDTH, HEIGHT),
 			on_ground: OnGround::default(),

@@ -61,6 +61,8 @@ impl Velocity {
 pub struct Gravity(pub Vec3);
 
 impl Gravity {
+	pub const ZERO: Self = Self(Vec3::ZERO);
+
 	pub const fn vertical(strength: f32) -> Self {
 		Self(Vec3::new(0.0, strength, 0.0))
 	}
