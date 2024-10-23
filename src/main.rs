@@ -21,6 +21,7 @@ compile_error!(
 	"you should enable dynamic linking when compiling in debug mode for faster compile times"
 );
 
+mod axis;
 mod block;
 mod block_model;
 mod cuboid;

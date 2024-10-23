@@ -38,9 +38,7 @@ impl BlockPos {
 
 	/// gets all block positions that touch this block, meaning diagonals are not counted
 	pub fn neighbours(self) -> impl Iterator<Item = Self> {
-		Face::all()
-			.into_iter()
-			.map(move |face| self + face.normal())
+		Face::all().map(move |face| self + face.normal())
 	}
 }
 

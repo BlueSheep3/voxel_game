@@ -1,10 +1,13 @@
+#![allow(dead_code)]
+
+use crate::axis::Axis;
 use bevy::math::IVec3;
 use bitmask::bitmask;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
 bitmask! {
-	pub mask FacesMask: u8 where flags Face {
+	pub mask FaceMask: u8 where flags Face {
 		Right = 1,
 		Left = 2,
 		Up = 4,
@@ -37,15 +40,31 @@ impl Face {
 		}
 	}
 
-	pub fn all() -> Vec<Self> {
-		vec![
-			Self::Right,
-			Self::Left,
-			Self::Up,
-			Self::Down,
-			Self::Back,
-			Self::Forward,
-		]
+	pub fn axis(self) -> Axis {
+		match self {
+			Self::Right | Self::Left => Axis::X,
+			Self::Up | Self::Down => Axis::Y,
+			Self::Back | Self::Forward => Axis::Z,
+		}
+	}
+
+	pub fn all() -> FaceIter {
+		FaceIter { index: 0 }
+	}
+}
+
+pub struct FaceIter {
+	index: u8,
+}
+
+impl Iterator for FaceIter {
+	type Item = Face;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		let face = index_to_face(self.index);
+		// all values above 5 will just be None
+		self.index = self.index.saturating_add(1);
+		face
 	}
 }
 
@@ -64,7 +83,18 @@ const fn face_to_index(face: Face) -> usize {
 	}
 }
 
-#[allow(dead_code)]
+const fn index_to_face(index: u8) -> Option<Face> {
+	match index {
+		0 => Some(Face::Right),
+		1 => Some(Face::Left),
+		2 => Some(Face::Up),
+		3 => Some(Face::Down),
+		4 => Some(Face::Back),
+		5 => Some(Face::Forward),
+		_ => None,
+	}
+}
+
 impl<T> FaceMap<T> {
 	pub fn get(&self, face: Face) -> &T {
 		&self.0[face_to_index(face)]

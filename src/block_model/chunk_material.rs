@@ -19,14 +19,15 @@ impl Plugin for ChunkMaterialPlugin {
 	fn build(&self, app: &mut App) {
 		app.add_plugins(MaterialPlugin::<
 			ExtendedMaterial<StandardMaterial, ChunkMaterial>,
-		>::default());
+		>::default())
+			.register_asset_reflect::<ExtendedMaterial<StandardMaterial, ChunkMaterial>>();
 	}
 }
 
 pub const ATTRIBUTE_BASE_VOXEL_INDICES: MeshVertexAttribute =
 	MeshVertexAttribute::new("BaseVoxelIndices", 47834329472, VertexFormat::Uint32);
 
-#[derive(AsBindGroup, Debug, Clone, Asset, TypePath)]
+#[derive(AsBindGroup, Debug, Clone, Asset, Reflect)]
 pub struct ChunkMaterial {
 	#[texture(100, dimension = "2d_array")]
 	#[sampler(101)]

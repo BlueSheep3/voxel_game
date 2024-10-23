@@ -2,7 +2,7 @@ use super::combine_mesh::combine_meshes;
 use crate::{
 	block::BlockId,
 	block_model::{BlockModel, BlockModelCuboid, ATTRIBUTE_BASE_VOXEL_INDICES},
-	face::{Face, FaceMap, FacesMask},
+	face::{Face, FaceMap, FaceMask},
 	game_world::chunk::{Chunk, CHUNK_LENGTH},
 	pos::BlockInChunkPos,
 };
@@ -16,7 +16,7 @@ struct BlockMeshInfo {
 	/// the shape of the cube mesh
 	cuboid: BlockModelCuboid<usize>,
 	/// which faces of the cubes should not be rendered to improve preformance
-	culled: FacesMask,
+	culled: FaceMask,
 	/// how much this block is offset from `(0,0,0)` in this chunk
 	pos: BlockInChunkPos,
 }
@@ -44,7 +44,7 @@ pub fn create_chunk_mesh(
 			} else {
 				// lazy approach of not culling anything if it's not a full block
 				// TODO cull those faces that are still covered up
-				FacesMask::none()
+				FaceMask::none()
 			};
 
 			// dont need to create a mesh if everything is culled away
@@ -69,8 +69,8 @@ fn get_culled_faces_at(
 	neighbour_chunks: &FaceMap<Chunk>,
 	pos: BlockInChunkPos,
 	block_models: &HashMap<BlockId, BlockModel<usize>>,
-) -> FacesMask {
-	let mut culled = FacesMask::none();
+) -> FaceMask {
+	let mut culled = FaceMask::none();
 
 	macro_rules! cull {
 		($axis:ident, $offset:expr, $face:ident, [$border:expr, $other_border:expr]) => {
@@ -138,7 +138,7 @@ fn get_cube_mesh_positions(
 	min: Vec3,
 	max: Vec3,
 	offset: BlockInChunkPos,
-	culled: FacesMask,
+	culled: FaceMask,
 ) -> Vec<[f32; 3]> {
 	macro_rules! ignore_culled {
 		($culled:ident; $(($face:ident, $([$x:tt, $y:tt, $z:tt]),*));* $(;)?) => {{
@@ -188,7 +188,7 @@ fn get_cube_mesh_positions(
 
 // TODO use this function for proper uvs, instead of always (0,0) to (1,1)
 #[allow(dead_code)]
-fn get_cube_mesh_uvs(block_model: &BlockModelCuboid<Rect>, culled: FacesMask) -> Vec<[f32; 2]> {
+fn get_cube_mesh_uvs(block_model: &BlockModelCuboid<Rect>, culled: FaceMask) -> Vec<[f32; 2]> {
 	// Set-up UV coordinated to point to the upper (V < 0.5), "dirt+grass" part of the texture.
 	// Take a look at the custom image (assets/textures/array_texture.png)
 	// so the UV coords will make more sense
@@ -202,7 +202,7 @@ fn get_cube_mesh_uvs(block_model: &BlockModelCuboid<Rect>, culled: FacesMask) ->
 		uvs: &mut Vec<[f32; 2]>,
 		positions: &FaceMap<Rect>,
 		face: Face,
-		culled: FacesMask,
+		culled: FaceMask,
 	) {
 		if culled.contains(face) {
 			return;
@@ -223,10 +223,10 @@ fn get_cube_mesh_uvs(block_model: &BlockModelCuboid<Rect>, culled: FacesMask) ->
 	uvs
 }
 
-fn get_temp_const_uvs(culled: FacesMask) -> Vec<[f32; 2]> {
+fn get_temp_const_uvs(culled: FaceMask) -> Vec<[f32; 2]> {
 	let mut uvs = Vec::new();
 
-	fn extend_uvs(uvs: &mut Vec<[f32; 2]>, face: Face, culled: FacesMask) {
+	fn extend_uvs(uvs: &mut Vec<[f32; 2]>, face: Face, culled: FaceMask) {
 		if culled.contains(face) {
 			return;
 		}
@@ -293,7 +293,7 @@ fn get_cube_mesh_normals() -> Vec<[f32; 3]> {
 	normals
 }
 
-fn get_cube_mesh_tris(culled: FacesMask) -> Vec<u32> {
+fn get_cube_mesh_tris(culled: FaceMask) -> Vec<u32> {
 	// Create the triangles out of the 24 vertices we created.
 	// To construct a square, we need 2 triangles, therefore 12 triangles in total.
 	// To construct a triangle, we need the indices of its 3 defined vertices, adding them one
@@ -318,10 +318,9 @@ fn get_cube_mesh_tris(culled: FacesMask) -> Vec<u32> {
 
 fn get_cube_mesh_voxel_indices(
 	block_model: &BlockModelCuboid<usize>,
-	culled: FacesMask,
+	culled: FaceMask,
 ) -> Vec<u32> {
 	Face::all()
-		.into_iter()
 		.filter(|&face| !culled.contains(face))
 		.flat_map(|face| {
 			let voxel_index = *block_model.sides.get(face) as u32;

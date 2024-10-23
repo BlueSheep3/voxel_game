@@ -130,7 +130,6 @@ fn earliest_block_hit(
 		.iter()
 		.flat_map(|block_collision| {
 			Face::all()
-				.into_iter()
 				.flat_map(|face| {
 					find_plane_intersect(hitbox, *block_collision, face, vel)
 						.map(|t| (t, face))

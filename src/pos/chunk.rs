@@ -34,9 +34,7 @@ impl ChunkPos {
 
 	/// gets all chunk positions that touch this chunk, meaning diagonals are not counted
 	pub fn neighbours(self) -> impl Iterator<Item = Self> {
-		Face::all()
-			.into_iter()
-			.map(move |face| self + face.normal())
+		Face::all().map(move |face| self + face.normal())
 	}
 
 	pub fn distance_squared(self, rhs: Self) -> u32 {
