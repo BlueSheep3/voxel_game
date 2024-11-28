@@ -1,14 +1,46 @@
-use crate::{entity::collision::ray::FiniteRay, pos::BlockPos};
-use bevy::prelude::*;
+use crate::{
+	entity::{collision::ray::FiniteRay, player::Player},
+	game_world::chunk::CHUNK_LENGTH,
+	pos::{BlockPos, Vec3Utils},
+};
+use bevy::{color::palettes::basic::YELLOW, prelude::*};
 
 pub struct DebugPlugin;
 
 impl Plugin for DebugPlugin {
 	fn build(&self, app: &mut App) {
-		app.insert_resource(DebugRes::default()).add_systems(
-			Update,
-			(spawn_temp_cubes, spawn_temp_lines, despawn_temp_cubes),
-		);
+		app.init_resource::<DrawChunkBorders>()
+			.register_type::<DrawChunkBorders>()
+			.init_resource::<DebugRes>()
+			.add_systems(
+				Update,
+				(
+					spawn_temp_cubes,
+					spawn_temp_lines,
+					despawn_temp_cubes,
+					toggle_chunk_borders,
+					draw_chunk_borders,
+				),
+			);
+	}
+}
+
+#[derive(Resource, Reflect)]
+#[reflect(Resource)]
+struct DrawChunkBorders {
+	enabled: bool,
+	color: Color,
+	/// from the center chunk, how many more chunks the grid goes out
+	half_size: UVec3,
+}
+
+impl Default for DrawChunkBorders {
+	fn default() -> Self {
+		Self {
+			enabled: false,
+			color: YELLOW.into(),
+			half_size: UVec3::splat(2),
+		}
 	}
 }
 
@@ -18,24 +50,21 @@ pub struct DebugRes {
 	queued_temp_lines: Vec<(Vec3, Vec3, f32, f32)>,
 }
 
+#[allow(dead_code)]
 impl DebugRes {
-	#[allow(dead_code)]
 	pub fn spawn_temp_cube(&mut self, pos: BlockPos, seconds: f32) {
 		self.queued_temp_cubes.push((pos, seconds));
 	}
 
-	#[allow(dead_code)]
 	pub fn spawn_temp_cubes(&mut self, pos: &[BlockPos], seconds: f32) {
 		self.queued_temp_cubes
 			.extend(pos.iter().map(|p| (*p, seconds)));
 	}
 
-	#[allow(dead_code)]
 	pub fn spawn_temp_line(&mut self, pos: Vec3, dir: Vec3, len: f32, seconds: f32) {
 		self.queued_temp_lines.push((pos, dir, len, seconds));
 	}
 
-	#[allow(dead_code)]
 	pub fn spawn_temp_ray(&mut self, ray: FiniteRay, seconds: f32) {
 		let FiniteRay { start, dir, length } = ray;
 		self.spawn_temp_line(start, dir, length, seconds);
@@ -72,17 +101,17 @@ fn spawn_temp_lines(
 	mut meshes: ResMut<Assets<Mesh>>,
 ) {
 	for (pos, dir, len, seconds) in debug_res.queued_temp_lines.drain(..) {
-		// FIXME janky code
+		let mut trans = Transform::from_translation(pos - Vec3::Z * len / 2.0);
+		trans.rotate_around(pos, Quat::from_rotation_arc(-Vec3::Z, dir));
+
+		let cuboid_mesh = Mesh::from(Cuboid {
+			half_size: Vec3::new(0.01, 0.01, len / 2.0),
+		});
+
 		commands.spawn((
 			PbrBundle {
-				mesh: meshes.add(Mesh::from(Cuboid {
-					half_size: Vec3::new(0.01, 0.01, len / 2.0),
-				})),
-				transform: {
-					let mut trans = Transform::from_translation(pos - Vec3::Z * len / 2.0);
-					trans.rotate_around(pos, Quat::from_rotation_arc(-Vec3::Z, dir));
-					trans
-				},
+				mesh: meshes.add(cuboid_mesh),
+				transform: trans,
 				..default()
 			},
 			TempCube(seconds),
@@ -102,4 +131,37 @@ fn despawn_temp_cubes(
 			commands.entity(id).despawn();
 		}
 	}
+}
+
+fn toggle_chunk_borders(
+	input: Res<ButtonInput<KeyCode>>,
+	mut draw_chunk_borders: ResMut<DrawChunkBorders>,
+) {
+	if input.just_pressed(KeyCode::KeyB) {
+		draw_chunk_borders.enabled ^= true;
+	}
+}
+
+fn draw_chunk_borders(
+	draw_chunk_borders: Res<DrawChunkBorders>,
+	mut gizmos: Gizmos,
+	player: Query<&Transform, With<Player>>,
+) {
+	if !draw_chunk_borders.enabled {
+		return;
+	}
+	let Ok(player) = player.get_single() else {
+		return;
+	};
+	let chunk_pos = player.translation.to_chunk_pos();
+	let center = chunk_pos.to_world_pos() + Vec3::splat(CHUNK_LENGTH as f32 / 2.);
+	gizmos
+		.grid_3d(
+			center,
+			Quat::IDENTITY,
+			draw_chunk_borders.half_size * 2 + UVec3::ONE,
+			Vec3::splat(CHUNK_LENGTH as f32),
+			draw_chunk_borders.color,
+		)
+		.outer_edges();
 }

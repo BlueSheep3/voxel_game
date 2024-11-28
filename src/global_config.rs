@@ -9,12 +9,14 @@ pub struct GlobalConfigPlugin;
 impl Plugin for GlobalConfigPlugin {
 	fn build(&self, app: &mut App) {
 		app.insert_resource(Config::load().unwrap_or_default())
+			.register_type::<Config>()
 			.add_plugins(FramepacePlugin)
 			.add_systems(Update, update_fps_limit);
 	}
 }
 
-#[derive(Resource, Debug, Clone, Serialize, Deserialize)]
+#[derive(Resource, Debug, Clone, Serialize, Deserialize, Reflect)]
+#[reflect(Resource)]
 pub struct Config {
 	/// the radius of how many chunks to load around the player horizontally
 	pub horizontal_render_distance: u32,
