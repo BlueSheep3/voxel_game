@@ -44,10 +44,12 @@ impl Plugin for RenderPlugin {
 }
 
 #[derive(Component)]
+#[require(Mesh3d, Transform)]
 struct ChunkMesh;
 
 // exaclty one ChunkMeshParent should exist while GlobalState::InWorld, otherwise zero
 #[derive(Component)]
+#[require(Transform, Visibility)]
 struct ChunkMeshParent;
 
 #[derive(Resource, Default)]
@@ -99,11 +101,7 @@ fn setup_global_material(
 }
 
 fn init(mut commands: Commands) {
-	commands.spawn((
-		SpatialBundle::default(),
-		ChunkMeshParent,
-		Name::new("ChunkMeshParent"),
-	));
+	commands.spawn((ChunkMeshParent, Name::new("ChunkMeshParent")));
 }
 
 fn cleanup(
@@ -272,12 +270,9 @@ fn spawn_chunk_meshes_from_tasks(
 
 		let entity = commands
 			.spawn((
-				MaterialMeshBundle {
-					mesh: cube_mesh_handle,
-					material: global_material.material.clone(),
-					transform: Transform::from_translation(chunk_pos.to_world_pos()),
-					..default()
-				},
+				Mesh3d(cube_mesh_handle),
+				MeshMaterial3d(global_material.material.clone()),
+				Transform::from_translation(chunk_pos.to_world_pos()),
 				ChunkMesh,
 				Name::new(format!("Chunk Mesh at {}", chunk_pos)),
 			))

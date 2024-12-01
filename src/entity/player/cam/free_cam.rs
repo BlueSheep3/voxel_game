@@ -35,6 +35,7 @@ impl Plugin for FreeCamPlugin {
 }
 
 #[derive(Component)]
+#[require(PlayerCam, Transform, Camera3d, LookDirection)]
 struct FreeCam;
 
 #[derive(Resource)]
@@ -55,18 +56,14 @@ fn spawn(
 ) {
 	let (player_trans, look_dir) = player.single();
 	commands.spawn((
-		PlayerCam,
 		FreeCam,
 		*look_dir,
-		Camera3dBundle {
-			transform: Transform::from_translation(player_trans.translation + Vec3::Y * EYE_HEIGHT)
-				.with_rotation(look_dir.to_quat()),
-			projection: Projection::Perspective(PerspectiveProjection {
-				fov: global_config.fov,
-				..default()
-			}),
+		Transform::from_translation(player_trans.translation + Vec3::Y * EYE_HEIGHT)
+			.with_rotation(look_dir.to_quat()),
+		Projection::Perspective(PerspectiveProjection {
+			fov: global_config.fov,
 			..default()
-		},
+		}),
 	));
 }
 
@@ -83,7 +80,7 @@ fn input_translation(
 	time: Res<Time>,
 	speed: Res<FreeCamSpeed>,
 ) {
-	let dt = time.delta_seconds();
+	let dt = time.delta_secs();
 	let (mut cam_trans, look_dir) = cam.single_mut();
 	let walk = walk_input.with_look_dir(*look_dir);
 	cam_trans.translation += walk * speed.speed * dt;

@@ -35,6 +35,7 @@ impl Plugin for FirstPersonCamPlugin {
 }
 
 #[derive(Component)]
+#[require(PlayerCam, Transform, Camera3d)]
 struct FirstPersonCam;
 
 fn spawn(
@@ -44,17 +45,13 @@ fn spawn(
 ) {
 	let (player_trans, look_dir) = player.single();
 	commands.spawn((
-		PlayerCam,
 		FirstPersonCam,
-		Camera3dBundle {
-			transform: Transform::from_translation(player_trans.translation + Vec3::Y * EYE_HEIGHT)
-				.with_rotation(look_dir.to_quat()),
-			projection: Projection::Perspective(PerspectiveProjection {
-				fov: global_config.fov,
-				..default()
-			}),
+		Transform::from_translation(player_trans.translation + Vec3::Y * EYE_HEIGHT)
+			.with_rotation(look_dir.to_quat()),
+		Projection::Perspective(PerspectiveProjection {
+			fov: global_config.fov,
 			..default()
-		},
+		}),
 	));
 }
 

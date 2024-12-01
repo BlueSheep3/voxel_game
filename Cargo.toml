@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-bevy = { version = "0.14", features = [ "serialize" ] }
+bevy = { version = "0.15", features = [ "serialize" ] }
 bitmask = "0.5"
 itertools = "0.13"
 rand = "0.8"
@@ -12,7 +12,7 @@ serde = { version = "1", features = [ "derive" ] }
 ron = "0.8"
 bincode = "1"
 noise = "0.9"
-bevy-inspector-egui = "0.27"
+bevy-inspector-egui = "0.28"
 float_next_after = "1"
 image = "0.25"
 thiserror = "1"

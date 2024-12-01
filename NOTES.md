@@ -37,6 +37,7 @@
 
 - input system that allows customizing between keyboard and mouse better
 - create new input types more easily
+- allow changing controls per `Gamepad`
 
 
 # Other

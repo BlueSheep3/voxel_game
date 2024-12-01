@@ -82,14 +82,11 @@ fn spawn_temp_cubes(
 ) {
 	for (pos, seconds) in debug_res.queued_temp_cubes.drain(..) {
 		commands.spawn((
-			PbrBundle {
-				mesh: meshes.add(Mesh::from(Cuboid {
-					half_size: Vec3::splat(0.55),
-				})),
-				transform: Transform::from_translation(pos.to_world_pos() + 0.525),
-				material: materials.add(StandardMaterial::from(Color::srgb(0.5, 0.0, 0.5))),
-				..default()
-			},
+			Mesh3d(meshes.add(Mesh::from(Cuboid {
+				half_size: Vec3::splat(0.55),
+			}))),
+			MeshMaterial3d(materials.add(StandardMaterial::from(Color::srgb(0.5, 0.0, 0.5)))),
+			Transform::from_translation(pos.to_world_pos() + 0.525),
 			TempCube(seconds),
 		));
 	}
@@ -108,14 +105,7 @@ fn spawn_temp_lines(
 			half_size: Vec3::new(0.01, 0.01, len / 2.0),
 		});
 
-		commands.spawn((
-			PbrBundle {
-				mesh: meshes.add(cuboid_mesh),
-				transform: trans,
-				..default()
-			},
-			TempCube(seconds),
-		));
+		commands.spawn((Mesh3d(meshes.add(cuboid_mesh)), trans, TempCube(seconds)));
 	}
 }
 
@@ -124,7 +114,7 @@ fn despawn_temp_cubes(
 	time: Res<Time>,
 	mut commands: Commands,
 ) {
-	let dt = time.delta_seconds();
+	let dt = time.delta_secs();
 	for (id, mut cube) in &mut query {
 		cube.0 -= dt;
 		if cube.0 <= 0.0 {
@@ -157,8 +147,7 @@ fn draw_chunk_borders(
 	let center = chunk_pos.to_world_pos() + Vec3::splat(CHUNK_LENGTH as f32 / 2.);
 	gizmos
 		.grid_3d(
-			center,
-			Quat::IDENTITY,
+			Isometry3d::from_translation(center),
 			draw_chunk_borders.half_size * 2 + UVec3::ONE,
 			Vec3::splat(CHUNK_LENGTH as f32),
 			draw_chunk_borders.color,

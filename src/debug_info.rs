@@ -41,16 +41,7 @@ fn try_toggle_debug_info(
 }
 
 fn spawn_debug_info_text(mut commands: Commands) {
-	commands.spawn((
-		TextBundle::from_section(
-			"",
-			TextStyle {
-				font_size: 20.0,
-				..default()
-			},
-		),
-		DebugInfoText,
-	));
+	commands.spawn((Text::new(""), TextFont::from_font_size(20.), DebugInfoText));
 }
 
 fn despawn_debug_info_text(mut commands: Commands, debug_text: Query<Entity, With<DebugInfoText>>) {
@@ -68,7 +59,7 @@ fn update_debug_info_text(
 	let mut text = String::new();
 
 	{
-		let fps = (1.0 / time.delta_seconds()).round();
+		let fps = (1.0 / time.delta_secs()).round();
 
 		text.push_str(&format!("FPS: {fps:03}\n"));
 	}
@@ -97,5 +88,5 @@ fn update_debug_info_text(
 	}
 
 	let mut text_obj = query.single_mut();
-	text_obj.sections[0].value = text;
+	text_obj.0 = text;
 }

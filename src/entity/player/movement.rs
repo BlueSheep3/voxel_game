@@ -87,7 +87,7 @@ fn walk(
 	time: Res<Time>,
 	values: Res<MovementValues>,
 ) {
-	let dt = time.delta_seconds();
+	let dt = time.delta_secs();
 	let (mut player_vel, look_dir, on_ground) = player.single_mut();
 	let vec = walk_input.with_look_dir(*look_dir);
 
@@ -105,7 +105,7 @@ fn friction(
 	time: Res<Time>,
 	values: Res<MovementValues>,
 ) {
-	let dt = time.delta_seconds();
+	let dt = time.delta_secs();
 	let (mut player_vel, on_ground) = player.single_mut();
 
 	let prev_y = player_vel.vel.y;
@@ -157,7 +157,7 @@ fn fly_vertical(
 	time: Res<Time>,
 	values: Res<MovementValues>,
 ) {
-	let dt = time.delta_seconds();
+	let dt = time.delta_secs();
 	let mut player_vel = player.single_mut();
 
 	let mut y_vel = 0.;

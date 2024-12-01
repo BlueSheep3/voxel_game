@@ -1,6 +1,7 @@
 use crate::savedata;
 use bevy::prelude::*;
-use bevy_framepace::{FramepacePlugin, FramepaceSettings, Limiter};
+// `bevy_framepace` is not on bevy version 0.15 yet
+// use bevy_framepace::{FramepacePlugin, FramepaceSettings, Limiter};
 use serde::{Deserialize, Serialize};
 use std::{error::Error, f32::consts::TAU, fs};
 
@@ -9,9 +10,10 @@ pub struct GlobalConfigPlugin;
 impl Plugin for GlobalConfigPlugin {
 	fn build(&self, app: &mut App) {
 		app.insert_resource(Config::load().unwrap_or_default())
-			.register_type::<Config>()
-			.add_plugins(FramepacePlugin)
-			.add_systems(Update, update_fps_limit);
+			.register_type::<Config>();
+		// `bevy_framepace` is not on bevy version 0.15 yet
+		// .add_plugins(FramepacePlugin)
+		// .add_systems(Update, update_fps_limit);
 	}
 }
 
@@ -48,12 +50,13 @@ impl Config {
 	}
 }
 
-fn update_fps_limit(config: Res<Config>, mut framepace: ResMut<FramepaceSettings>) {
-	if config.is_changed() {
-		if let Some(fps_limit) = config.fps_limit {
-			framepace.limiter = Limiter::from_framerate(fps_limit);
-		} else {
-			framepace.limiter = Limiter::Auto;
-		}
-	}
-}
+// `bevy_framepace` is not on bevy version 0.15 yet
+// fn update_fps_limit(config: Res<Config>, mut framepace: ResMut<FramepaceSettings>) {
+// 	if config.is_changed() {
+// 		if let Some(fps_limit) = config.fps_limit {
+// 			framepace.limiter = Limiter::from_framerate(fps_limit);
+// 		} else {
+// 			framepace.limiter = Limiter::Auto;
+// 		}
+// 	}
+// }

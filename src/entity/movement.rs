@@ -75,7 +75,7 @@ fn move_without_collision(
 	mut query: Query<(&mut Transform, &Velocity), Without<BoxCollider>>,
 	time: Res<Time>,
 ) {
-	let dt = time.delta_seconds();
+	let dt = time.delta_secs();
 	for (mut trans, vel) in &mut query {
 		// compute:  v += a/2;  s += v;  v += a/2;
 		// because this is the most accurate approximation of continuos motion
@@ -85,7 +85,7 @@ fn move_without_collision(
 }
 
 fn gravity(mut query: Query<(&mut Velocity, &Gravity)>, time: Res<Time>) {
-	let dt = time.delta_seconds();
+	let dt = time.delta_secs();
 	for (mut vel, grav) in &mut query {
 		vel.vel += grav.0 * dt;
 	}

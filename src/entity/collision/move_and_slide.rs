@@ -37,7 +37,7 @@ fn move_and_slide(
 	time: Res<Time>,
 	game_world: Res<GameWorld>,
 ) {
-	let dt = time.delta_seconds();
+	let dt = time.delta_secs();
 	for (mut trans, mut vel, col, mut on_ground) in &mut query {
 		let local_hitbox = col.into_cuboid();
 

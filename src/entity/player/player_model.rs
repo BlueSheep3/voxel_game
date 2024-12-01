@@ -18,6 +18,7 @@ impl Plugin for PlayerModelPlugin {
 }
 
 #[derive(Component)]
+#[require(Transform)]
 struct PlayerModel;
 
 fn spawn(
@@ -29,19 +30,14 @@ fn spawn(
 	let player_trans = player.single();
 	commands.spawn((
 		PlayerModel,
-		PbrBundle {
-			mesh: meshes.add(Mesh::from(Cuboid {
-				half_size: Vec3::new(super::WIDTH, super::HEIGHT, super::WIDTH) / 2.,
-			})),
-			material: materials.add(StandardMaterial {
-				unlit: true,
-				..default()
-			}),
-			transform: Transform::from_translation(
-				player_trans.translation + Vec3::Y * super::HEIGHT / 2.,
-			),
+		Mesh3d(meshes.add(Mesh::from(Cuboid {
+			half_size: Vec3::new(super::WIDTH, super::HEIGHT, super::WIDTH) / 2.,
+		}))),
+		MeshMaterial3d(materials.add(StandardMaterial {
+			unlit: true,
 			..default()
-		},
+		})),
+		Transform::from_translation(player_trans.translation + Vec3::Y * super::HEIGHT / 2.),
 	));
 }
 

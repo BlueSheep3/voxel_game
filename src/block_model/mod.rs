@@ -5,12 +5,9 @@ mod wireframe_rendering;
 use self::{chunk_material::ChunkMaterialPlugin, wireframe_rendering::WireframeRenderingPlugin};
 use crate::{block::BlockId, face::FaceMap, GlobalState};
 use bevy::{
-	asset::LoadState,
+	image::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor},
 	prelude::*,
-	render::{
-		render_asset::RenderAssetUsages,
-		texture::{ImageAddressMode, ImageSampler, ImageSamplerDescriptor},
-	},
+	render::render_asset::RenderAssetUsages,
 };
 use image::{imageops, DynamicImage};
 use serde::Deserialize;
@@ -126,7 +123,7 @@ fn check_finished_loading_images(
 	block_images: Res<BlockModelWithImages>,
 	mut loading_state: ResMut<NextState<LoadingState>>,
 ) {
-	let image_is_loaded = |i| asset_server.load_state(i) == LoadState::Loaded;
+	let image_is_loaded = |i| asset_server.load_state(i).is_loaded();
 	let all_loaded = block_images.images.iter().all(|(_, model)| {
 		model
 			.cuboids

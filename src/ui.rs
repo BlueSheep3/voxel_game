@@ -19,28 +19,22 @@ fn spawn(mut commands: Commands, asset_server: Res<AssetServer>) {
 	commands
 		.spawn((
 			UiRoot,
-			NodeBundle {
-				style: Style {
-					width: Val::Percent(100.0),
-					height: Val::Percent(100.0),
-					justify_content: JustifyContent::Center,
-					align_items: AlignItems::Center,
-					..default()
-				},
+			Node {
+				width: Val::Percent(100.0),
+				height: Val::Percent(100.0),
+				justify_content: JustifyContent::Center,
+				align_items: AlignItems::Center,
 				..default()
 			},
 		))
 		.with_children(|parent| {
 			parent.spawn((
-				NodeBundle {
-					style: Style {
-						width: Val::VMin(5.0),
-						height: Val::VMin(5.0),
-						..default()
-					},
+				Node {
+					width: Val::VMin(5.0),
+					height: Val::VMin(5.0),
 					..default()
 				},
-				UiImage::new(crosshair),
+				ImageNode::new(crosshair),
 			));
 		});
 }

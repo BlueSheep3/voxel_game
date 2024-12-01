@@ -31,19 +31,16 @@ struct StartButton;
 struct NewWorldButton;
 
 fn spawn(mut commands: Commands) {
-	commands.spawn((MainMenuCamera, Camera3dBundle::default()));
+	commands.spawn((MainMenuCamera, Camera3d::default()));
 
 	commands
 		.spawn((
 			MainMenuRoot,
-			NodeBundle {
-				style: Style {
-					width: Val::Percent(100.),
-					height: Val::Percent(100.),
-					justify_content: JustifyContent::Center,
-					align_items: AlignItems::Center,
-					..default()
-				},
+			Node {
+				width: Val::Percent(100.),
+				height: Val::Percent(100.),
+				justify_content: JustifyContent::Center,
+				align_items: AlignItems::Center,
 				// TODO add background
 				..default()
 			},
@@ -52,60 +49,44 @@ fn spawn(mut commands: Commands) {
 			parent
 				.spawn((
 					NewWorldButton,
-					ButtonBundle {
-						style: Style {
-							width: Val::VMin(20.),
-							height: Val::VMin(10.),
-							margin: UiRect::all(Val::VMin(1.)),
-							justify_content: JustifyContent::Center,
-							align_items: AlignItems::Center,
-							..default()
-						},
-						background_color: Color::srgb(0.15, 0.15, 0.15).into(),
+					Button,
+					Node {
+						width: Val::VMin(20.),
+						height: Val::VMin(10.),
+						margin: UiRect::all(Val::VMin(1.)),
+						justify_content: JustifyContent::Center,
+						align_items: AlignItems::Center,
 						..default()
 					},
+					BackgroundColor::from(Color::srgb(0.15, 0.15, 0.15)),
 				))
 				.with_children(|parent| {
-					parent.spawn(TextBundle {
-						text: Text::from_section(
-							"New World",
-							TextStyle {
-								color: Color::WHITE,
-								font_size: 20.,
-								..default()
-							},
-						),
-						..default()
-					});
+					parent.spawn((
+						Text::new("New World"),
+						TextColor::from(Color::WHITE),
+						TextFont::from_font_size(20.),
+					));
 				});
 			parent
 				.spawn((
 					StartButton,
-					ButtonBundle {
-						style: Style {
-							width: Val::VMin(20.),
-							height: Val::VMin(10.),
-							margin: UiRect::all(Val::VMin(1.)),
-							justify_content: JustifyContent::Center,
-							align_items: AlignItems::Center,
-							..default()
-						},
-						background_color: Color::srgb(0.15, 0.15, 0.15).into(),
+					Button,
+					Node {
+						width: Val::VMin(20.),
+						height: Val::VMin(10.),
+						margin: UiRect::all(Val::VMin(1.)),
+						justify_content: JustifyContent::Center,
+						align_items: AlignItems::Center,
 						..default()
 					},
+					BackgroundColor::from(Color::srgb(0.15, 0.15, 0.15)),
 				))
 				.with_children(|parent| {
-					parent.spawn(TextBundle {
-						text: Text::from_section(
-							"Play",
-							TextStyle {
-								color: Color::WHITE,
-								font_size: 20.,
-								..default()
-							},
-						),
-						..default()
-					});
+					parent.spawn((
+						Text::new("Play"),
+						TextColor::from(Color::WHITE),
+						TextFont::from_font_size(20.),
+					));
 				});
 		});
 }
