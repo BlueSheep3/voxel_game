@@ -1,5 +1,6 @@
 use crate::{
 	entity::{movement::Velocity, player::Player},
+	pos::Vec3Utils,
 	GlobalState,
 };
 use bevy::prelude::*;
@@ -72,9 +73,14 @@ fn update_debug_info_text(
 
 	if let Ok(player) = player.get_single() {
 		let pos = player.0.translation;
+		let chunk_pos = player.0.translation.to_chunk_pos();
+		let pos_in_chunk = player.0.translation.to_block_pos().to_block_in_chunk_pos();
 		let vel = player.1.vel;
 
-		text.push_str(&format!("Pos: {pos:.2?}\nVel: {vel:.2?}\n"));
+		text.push_str(&format!("Pos: {pos:.2?}\n"));
+		text.push_str(&format!("ChunkPos: {chunk_pos:.2?}\n"));
+		text.push_str(&format!("PosInChunk: {pos_in_chunk:.2?}\n"));
+		text.push_str(&format!("Vel: {vel:.2?}\n"));
 	}
 
 	if let Ok(cam) = cam.get_single() {

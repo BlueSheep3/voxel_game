@@ -1,9 +1,12 @@
 mod combine_mesh;
 mod mesh;
 
+use std::time::Instant;
+
 use self::mesh::create_chunk_mesh;
 use super::ChunkUpdateEvent;
 use crate::{
+	bench::BenchName,
 	block_model::{ChunkMaterial, GlobalTexture, LoadingState},
 	face::FaceMap,
 	game_world::{loading::UpdateChunkIsLoadedEvent, GameWorld},
@@ -209,6 +212,9 @@ fn create_chunk_redraw_tasks(
 		.get(&chunk_pos)
 		.expect("got chunk update event, even though there is no chunk");
 
+	// benchmarking of thread spawning
+	let start_time = Instant::now();
+
 	let block_models = global_texture.mappings.clone();
 	let cloned_chunk = chunk.clone();
 
@@ -233,6 +239,8 @@ fn create_chunk_redraw_tasks(
 	let task = pool
 		.spawn(async move { create_chunk_mesh(&cloned_chunk, &neighbour_chunks, &block_models) });
 	mesh_tasks.tasks.insert(chunk_pos, task);
+
+	crate::bench::push_time(BenchName::SpawnThread, start_time.elapsed());
 }
 
 fn spawn_chunk_meshes_from_tasks(

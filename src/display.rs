@@ -1,6 +1,6 @@
 use crate::{
 	face::Face,
-	pos::{BlockPos, ChunkPos},
+	pos::{BlockInChunkPos, BlockPos, ChunkPos},
 };
 use std::fmt::{self, Debug, Display};
 
@@ -29,6 +29,22 @@ impl Display for BlockPos {
 impl Debug for BlockPos {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_tuple(stringify!(BlockPos))
+			.field(&self.x)
+			.field(&self.y)
+			.field(&self.z)
+			.finish()
+	}
+}
+
+impl Display for BlockInChunkPos {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "[{}, {}, {}]", self.x, self.y, self.z)
+	}
+}
+
+impl Debug for BlockInChunkPos {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_tuple(stringify!(BlockInChunkPos))
 			.field(&self.x)
 			.field(&self.y)
 			.field(&self.z)

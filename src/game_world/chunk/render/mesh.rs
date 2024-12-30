@@ -1,5 +1,6 @@
 use super::combine_mesh::combine_meshes;
 use crate::{
+	bench::BenchName,
 	block::BlockId,
 	block_model::{BlockModel, BlockModelCuboid, ATTRIBUTE_BASE_VOXEL_INDICES},
 	face::{Face, FaceMap, FaceMask},
@@ -10,7 +11,7 @@ use bevy::{
 	prelude::*,
 	render::{mesh::Indices, render_asset::RenderAssetUsages, render_resource::PrimitiveTopology},
 };
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 struct BlockMeshInfo {
 	/// the shape of the cube mesh
@@ -26,6 +27,9 @@ pub fn create_chunk_mesh(
 	neighbour_chunks: &FaceMap<Chunk>,
 	block_models: &HashMap<BlockId, BlockModel<usize>>,
 ) -> Mesh {
+	// benchmarking of creating the chunk mesh
+	let start_time = Instant::now();
+
 	let meshes = chunk
 		.blocks
 		.iter_xyz()
@@ -61,7 +65,11 @@ pub fn create_chunk_mesh(
 			Some(mesh)
 		});
 
-	combine_meshes(meshes)
+	let combined_meshes = combine_meshes(meshes);
+
+	crate::bench::push_time(BenchName::CreateChunkMesh, start_time.elapsed());
+
+	combined_meshes
 }
 
 fn get_culled_faces_at(

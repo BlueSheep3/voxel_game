@@ -22,6 +22,7 @@ compile_error!(
 );
 
 mod axis;
+mod bench;
 mod block;
 mod block_model;
 mod cuboid;
@@ -68,6 +69,7 @@ fn main() -> AppExit {
 			debug::DebugPlugin,
 			main_menu::MainMenuPlugin,
 			global_config::GlobalConfigPlugin,
+			bench::BenchPlugin,
 		))
 		.init_state::<GlobalState>()
 		.add_systems(
