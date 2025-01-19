@@ -46,12 +46,9 @@ fn get_rotate_input(
 	for gamepad in &gamepads {
 		if let (Some(x), Some(y)) = (
 			gamepad.get(GamepadAxis::RightStickX),
-			gamepad.get(GamepadAxis::RightStickX),
+			gamepad.get(GamepadAxis::RightStickY),
 		) {
 			rotate_input.pitch += y * controls.rotate_sensivity;
-
-			// why does this have to be negated???
-			// and is it specific to nintendo switch controllers?
 			rotate_input.yaw -= x * controls.rotate_sensivity;
 		}
 	}

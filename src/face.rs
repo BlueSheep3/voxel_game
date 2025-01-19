@@ -1,4 +1,9 @@
 #![allow(dead_code)]
+// Since Rust 1.84.0 (https://github.com/rust-lang/rust/pull/132577)
+// the `unexpected_cfgs` warning is also shown when used inside a macro.
+// Until the `bitmask` crate fixes that its macro causes this warning,
+// it will be ignored here.
+#![allow(unexpected_cfgs)]
 
 use crate::axis::Axis;
 use bevy::math::IVec3;

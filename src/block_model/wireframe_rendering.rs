@@ -15,6 +15,16 @@ impl Plugin for WireframeRenderingPlugin {
 				// This can be changed via bevy inspector egui to render wireframes.
 				global: false,
 				default_color: Color::WHITE,
-			});
+			})
+			.add_systems(Update, toggle_wireframe_on_n);
+	}
+}
+
+fn toggle_wireframe_on_n(
+	mut wireframe_config: ResMut<WireframeConfig>,
+	keyboard_input: Res<ButtonInput<KeyCode>>,
+) {
+	if keyboard_input.just_pressed(KeyCode::KeyN) {
+		wireframe_config.global ^= true;
 	}
 }
