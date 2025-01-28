@@ -9,7 +9,10 @@ use crate::axis::Axis;
 use bevy::math::IVec3;
 use bitmask::bitmask;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{
+	fmt::Debug,
+	ops::{Index, IndexMut},
+};
 
 bitmask! {
 	pub mask FaceMask: u8 where flags Face {
@@ -101,14 +104,6 @@ const fn index_to_face(index: u8) -> Option<Face> {
 }
 
 impl<T> FaceMap<T> {
-	pub fn get(&self, face: Face) -> &T {
-		&self.0[face_to_index(face)]
-	}
-
-	pub fn get_mut(&mut self, face: Face) -> &mut T {
-		&mut self.0[face_to_index(face)]
-	}
-
 	pub fn iter(&self) -> impl Iterator<Item = &T> {
 		self.0.iter()
 	}
@@ -138,6 +133,20 @@ impl<T> FaceMap<T> {
 		[F::Right, F::Left, F::Up, F::Down, F::Back, F::Forward]
 			.map(f)
 			.into()
+	}
+}
+
+impl<T> Index<Face> for FaceMap<T> {
+	type Output = T;
+
+	fn index(&self, index: Face) -> &Self::Output {
+		&self.0[face_to_index(index)]
+	}
+}
+
+impl<T> IndexMut<Face> for FaceMap<T> {
+	fn index_mut(&mut self, index: Face) -> &mut Self::Output {
+		&mut self.0[face_to_index(index)]
 	}
 }
 

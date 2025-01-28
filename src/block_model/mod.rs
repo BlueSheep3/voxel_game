@@ -178,8 +178,8 @@ fn get_textures(
 					continue;
 				}
 
-				let model = block_images.images.get(&block_id).unwrap();
-				let block_image = model.cuboids[i].sides.get(face);
+				let model = &block_images.images[&block_id];
+				let block_image = &model.cuboids[i].sides[face];
 				let image = images.get(block_image).unwrap();
 				block_textures.push(image.clone());
 				used_paths.insert(side.clone(), index);

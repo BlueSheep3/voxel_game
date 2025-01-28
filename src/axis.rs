@@ -8,7 +8,10 @@
 use crate::face::Face;
 use bitmask::bitmask;
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::{
+	fmt::Debug,
+	ops::{Index, IndexMut},
+};
 
 bitmask! {
 	pub mask AxisMask: u8 where flags Axis {
@@ -77,14 +80,6 @@ const fn index_to_axis(index: u8) -> Option<Axis> {
 }
 
 impl<T> AxisMap<T> {
-	pub fn get(&self, axis: Axis) -> &T {
-		&self.0[axis_to_index(axis)]
-	}
-
-	pub fn get_mut(&mut self, axis: Axis) -> &mut T {
-		&mut self.0[axis_to_index(axis)]
-	}
-
 	pub fn iter(&self) -> impl Iterator<Item = &T> {
 		self.0.iter()
 	}
@@ -110,6 +105,20 @@ impl<T> AxisMap<T> {
 	pub fn from_map(f: impl FnMut(Axis) -> T) -> Self {
 		use Axis as A;
 		[A::X, A::Y, A::Z].map(f).into()
+	}
+}
+
+impl<T> Index<Axis> for AxisMap<T> {
+	type Output = T;
+
+	fn index(&self, index: Axis) -> &Self::Output {
+		&self.0[axis_to_index(index)]
+	}
+}
+
+impl<T> IndexMut<Axis> for AxisMap<T> {
+	fn index_mut(&mut self, index: Axis) -> &mut Self::Output {
+		&mut self.0[axis_to_index(index)]
 	}
 }
 

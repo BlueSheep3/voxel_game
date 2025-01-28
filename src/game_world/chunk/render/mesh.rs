@@ -1,5 +1,6 @@
 use super::combine_mesh::combine_meshes;
 use crate::{
+	axis::AxisMap,
 	bench::BenchName,
 	block::BlockId,
 	block_model::{BlockModel, BlockModelCuboid, ATTRIBUTE_BASE_VOXEL_INDICES},
@@ -23,13 +24,14 @@ struct BlockMeshInfo {
 }
 
 pub fn create_chunk_mesh(
-	chunk: &Chunk,
-	neighbour_chunks: &FaceMap<Chunk>,
+	chunk: Chunk,
+	blocks_mask: AxisMap<[[u64; CHUNK_LENGTH]; CHUNK_LENGTH]>,
 	block_models: &HashMap<BlockId, BlockModel<usize>>,
 ) -> Mesh {
 	// benchmarking of creating the chunk mesh
 	let start_time = Instant::now();
 
+	// TODO dont iterate over every block
 	let meshes = chunk
 		.blocks
 		.iter_xyz()
@@ -44,7 +46,7 @@ pub fn create_chunk_mesh(
 		})
 		.flat_map(|(pos, cuboid, should_cull)| {
 			let culled = if should_cull {
-				get_culled_faces_at(chunk, neighbour_chunks, pos, block_models)
+				get_culled_faces_at(chunk, todo!(), pos, block_models)
 			} else {
 				// lazy approach of not culling anything if it's not a full block
 				// TODO cull those faces that are still covered up
@@ -72,6 +74,7 @@ pub fn create_chunk_mesh(
 	combined_meshes
 }
 
+// TODO this function will be completely replaced
 fn get_culled_faces_at(
 	chunk: &Chunk,
 	neighbour_chunks: &FaceMap<Chunk>,
@@ -83,10 +86,10 @@ fn get_culled_faces_at(
 	macro_rules! cull {
 		($axis:ident, $offset:expr, $face:ident, [$border:expr, $other_border:expr]) => {
 			if pos.$axis == $border as u8 {
-				let chunk = neighbour_chunks.get(Face::$face);
+				let chunk = &neighbour_chunks[Face::$face];
 				let mut adjacent_pos = pos;
 				adjacent_pos.$axis = $other_border as u8;
-				let model = block_models.get(&chunk.blocks[adjacent_pos].id).unwrap();
+				let model = &block_models[&chunk.blocks[adjacent_pos].id];
 				if model.should_cull {
 					culled.set(Face::$face);
 				}
@@ -215,9 +218,9 @@ fn get_cube_mesh_uvs(block_model: &BlockModelCuboid<Rect>, culled: FaceMask) -> 
 		if culled.contains(face) {
 			return;
 		}
-		let Rect { min, max } = positions.get(face);
-		let Vec2 { x: x0, y: y0 } = *min;
-		let Vec2 { x: x1, y: y1 } = *max;
+		let Rect { min, max } = positions[face];
+		let Vec2 { x: x0, y: y0 } = min;
+		let Vec2 { x: x1, y: y1 } = max;
 		uvs.extend([[x0, y0], [x0, y1], [x1, y1], [x1, y0]]);
 	}
 
@@ -331,7 +334,7 @@ fn get_cube_mesh_voxel_indices(
 	Face::all()
 		.filter(|&face| !culled.contains(face))
 		.flat_map(|face| {
-			let voxel_index = *block_model.sides.get(face) as u32;
+			let voxel_index = block_model.sides[face] as u32;
 			vec![voxel_index; 4]
 		})
 		.collect()

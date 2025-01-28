@@ -1,16 +1,15 @@
 mod combine_mesh;
 mod mesh;
 
-use std::time::Instant;
-
 use self::mesh::create_chunk_mesh;
-use super::ChunkUpdateEvent;
+use super::{ChunkUpdateEvent, CHUNK_LENGTH};
 use crate::{
+	axis::{Axis, AxisMap},
 	bench::BenchName,
 	block_model::{ChunkMaterial, GlobalTexture, LoadingState},
 	face::FaceMap,
 	game_world::{loading::UpdateChunkIsLoadedEvent, GameWorld},
-	pos::ChunkPos,
+	pos::{BlockInChunkPos, ChunkPos},
 	GlobalState,
 };
 use bevy::{
@@ -19,6 +18,7 @@ use bevy::{
 	tasks::{block_on, AsyncComputeTaskPool, Task},
 	utils::HashMap,
 };
+use std::time::Instant;
 
 pub struct RenderPlugin;
 
@@ -215,12 +215,9 @@ fn create_chunk_redraw_tasks(
 	// benchmarking of thread spawning
 	let start_time = Instant::now();
 
-	let block_models = global_texture.mappings.clone();
-	let cloned_chunk = chunk.clone();
-
 	let neighbour_chunks = FaceMap::from_map(|face| {
 		let pos = chunk_pos + face.normal();
-		game_world.chunks.get(&pos).cloned()
+		game_world.chunks.get(&pos)
 	})
 	.all_some();
 	let Some(neighbour_chunks) = neighbour_chunks else {
@@ -235,9 +232,23 @@ fn create_chunk_redraw_tasks(
 		return;
 	}
 
+	let block_models = global_texture.mappings.clone();
+
+	let mut blocks_mask = AxisMap::<[[u64; CHUNK_LENGTH]; CHUNK_LENGTH]>::default();
+	for (pos, block) in chunk.blocks.iter_xyz() {
+		let BlockInChunkPos { x, y, z } = pos;
+		let [x, y, z] = [x as usize, y as usize, z as usize];
+		if block_models[&block.id].should_cull {
+			blocks_mask[Axis::X][y][z] |= 1 << (x + 1);
+			blocks_mask[Axis::Y][x][z] |= 1 << (y + 1);
+			blocks_mask[Axis::Z][x][y] |= 1 << (z + 1);
+		}
+	}
+
 	let pool = AsyncComputeTaskPool::get();
-	let task = pool
-		.spawn(async move { create_chunk_mesh(&cloned_chunk, &neighbour_chunks, &block_models) });
+	let cloned_chunk = chunk.clone();
+	let task =
+		pool.spawn(async move { create_chunk_mesh(cloned_chunk, blocks_mask, &block_models) });
 	mesh_tasks.tasks.insert(chunk_pos, task);
 
 	crate::bench::push_time(BenchName::SpawnThread, start_time.elapsed());
