@@ -120,6 +120,7 @@ fn select_current_block(input: Res<ButtonInput<KeyCode>>, mut current_block: Res
 		Digit7, Log;
 		Digit8, Planks;
 		Digit9, Leaves;
+		Digit0, Stairs;
 	];
 }
 

@@ -9,7 +9,7 @@
 /// # use crate::block::BlockId;
 /// let id = BlockId::from_debug_name("Stone").unwrap();
 /// let is_replacable = match_block_id!(id, (block: Type) => {
-///     format!("{} | {}", Type::BlockId.0, block.is_replacable())
+///     format!("{} | {}", Type::BLOCK_ID.0, block.is_replacable())
 /// });
 /// assert_eq!(is_replacable, "1 | false");
 /// ```
@@ -26,6 +26,7 @@ macro_rules! match_block_id {
 			log::Log,
 			planks::Planks,
 			leaves::Leaves,
+			stairs::Stairs,
 			debug_block::DebugBlock,
 			debug_slab::DebugSlab,
 		}

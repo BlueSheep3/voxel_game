@@ -7,4 +7,5 @@ pub mod grass_block;
 pub mod leaves;
 pub mod log;
 pub mod planks;
+pub mod stairs;
 pub mod stone;

@@ -47,6 +47,8 @@ pub fn push_time(name: BenchName, duration: Duration) {
 
 fn save_benches_to_file(input: Res<ButtonInput<KeyCode>>) {
 	if input.just_pressed(KeyCode::KeyK) {
+		info!("saving benchmarks...");
+
 		let base_path = crate::savedata::get_savedata_path();
 
 		for (name, times) in &*BENCHES.lock().unwrap() {
