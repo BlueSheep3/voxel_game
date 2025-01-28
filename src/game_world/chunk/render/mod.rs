@@ -2,11 +2,12 @@ mod combine_mesh;
 mod mesh;
 
 use self::mesh::create_chunk_mesh;
-use super::{ChunkUpdateEvent, CHUNK_LENGTH};
+use super::{Chunk, ChunkUpdateEvent, CHUNK_LENGTH};
 use crate::{
 	axis::{Axis, AxisMap},
 	bench::BenchName,
-	block_model::{ChunkMaterial, GlobalTexture, LoadingState},
+	block::BlockId,
+	block_model::{BlockModel, ChunkMaterial, GlobalTexture, LoadingState},
 	face::FaceMap,
 	game_world::{loading::UpdateChunkIsLoadedEvent, GameWorld},
 	pos::{BlockInChunkPos, ChunkPos},
@@ -16,9 +17,8 @@ use bevy::{
 	pbr::ExtendedMaterial,
 	prelude::*,
 	tasks::{block_on, AsyncComputeTaskPool, Task},
-	utils::HashMap,
 };
-use std::time::Instant;
+use std::{collections::HashMap, time::Instant};
 
 pub struct RenderPlugin;
 
@@ -232,9 +232,34 @@ fn create_chunk_redraw_tasks(
 		return;
 	}
 
+	let blocks_mask = get_blocks_bitmask(chunk, &global_texture.mappings, neighbour_chunks);
+	let cloned_chunk = chunk.clone();
 	let block_models = global_texture.mappings.clone();
 
+	let pool = AsyncComputeTaskPool::get();
+	#[rustfmt::skip]
+	let task = pool.spawn(async move {
+		create_chunk_mesh(cloned_chunk, blocks_mask, block_models)
+	});
+	mesh_tasks.tasks.insert(chunk_pos, task);
+
+	crate::bench::push_time(BenchName::SpawnThread, start_time.elapsed());
+}
+
+/// Will generate 3 bitmasks for this chunk, one for each axis.
+/// The bits just mean whether a cullable block is there or not.
+/// The 0th bit is an edge block of the negative facing neighbour chunk,
+/// while the 33rd bit is the edge block of the opposite chunk,
+/// and all bits in between (1st to 32nd inclusive) are the current chunk.
+fn get_blocks_bitmask(
+	chunk: &Chunk,
+	block_models: &HashMap<BlockId, BlockModel<usize>>,
+	neighbour_chunks: FaceMap<&Chunk>,
+) -> AxisMap<[[u64; CHUNK_LENGTH]; CHUNK_LENGTH]> {
+	// start out with a completely empty mask
 	let mut blocks_mask = AxisMap::<[[u64; CHUNK_LENGTH]; CHUNK_LENGTH]>::default();
+
+	// fill in the current chunk
 	for (pos, block) in chunk.blocks.iter_xyz() {
 		let BlockInChunkPos { x, y, z } = pos;
 		let [x, y, z] = [x as usize, y as usize, z as usize];
@@ -245,13 +270,33 @@ fn create_chunk_redraw_tasks(
 		}
 	}
 
-	let pool = AsyncComputeTaskPool::get();
-	let cloned_chunk = chunk.clone();
-	let task =
-		pool.spawn(async move { create_chunk_mesh(cloned_chunk, blocks_mask, &block_models) });
-	mesh_tasks.tasks.insert(chunk_pos, task);
+	// fill in the edges of the neighbouring chunks
+	macro_rules! neighbours {
+		($(($a:ident, $b:ident) in $axis:expr => [$x:expr, $y:expr, $z:expr]);* $(;)?) => {
+			$(
+			for $a in 0..CHUNK_LENGTH {
+				for $b in 0..CHUNK_LENGTH {
+					let pos = BlockInChunkPos::new($x, $y, $z);
+					let block = neighbour_chunks[$axis.face_neg()].blocks[pos];
+					if block_models[&block.id].should_cull {
+						blocks_mask[$axis][$a][$b] |= 1;
+					}
+					let block = neighbour_chunks[$axis.face_pos()].blocks[pos];
+					if block_models[&block.id].should_cull {
+						blocks_mask[$axis][$a][$b] |= 1 << (CHUNK_LENGTH + 1);
+					}
+				}
+			}
+			)*
+		};
+	}
+	neighbours! {
+		(y, z) in Axis::X => [0, y as u8, z as u8];
+		(x, z) in Axis::Y => [x as u8, 0, z as u8];
+		(x, y) in Axis::Z => [x as u8, y as u8, 0];
+	}
 
-	crate::bench::push_time(BenchName::SpawnThread, start_time.elapsed());
+	blocks_mask
 }
 
 fn spawn_chunk_meshes_from_tasks(

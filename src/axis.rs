@@ -22,7 +22,7 @@ bitmask! {
 }
 
 impl Axis {
-	pub fn face_pos(self) -> Face {
+	pub const fn face_pos(self) -> Face {
 		match self {
 			Self::X => Face::Right,
 			Self::Y => Face::Up,
@@ -30,7 +30,7 @@ impl Axis {
 		}
 	}
 
-	pub fn face_neg(self) -> Face {
+	pub const fn face_neg(self) -> Face {
 		match self {
 			Self::X => Face::Left,
 			Self::Y => Face::Down,

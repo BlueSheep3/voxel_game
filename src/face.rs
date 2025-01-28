@@ -26,18 +26,18 @@ bitmask! {
 }
 
 impl Face {
-	pub fn normal(self) -> IVec3 {
+	pub const fn normal(self) -> IVec3 {
 		match self {
 			Self::Right => IVec3::X,
-			Self::Left => -IVec3::X,
+			Self::Left => IVec3::NEG_X,
 			Self::Up => IVec3::Y,
-			Self::Down => -IVec3::Y,
+			Self::Down => IVec3::NEG_Y,
 			Self::Back => IVec3::Z,
-			Self::Forward => -IVec3::Z,
+			Self::Forward => IVec3::NEG_Z,
 		}
 	}
 
-	pub fn opposite(self) -> Self {
+	pub const fn opposite(self) -> Self {
 		match self {
 			Self::Right => Self::Left,
 			Self::Left => Self::Right,
@@ -48,7 +48,7 @@ impl Face {
 		}
 	}
 
-	pub fn axis(self) -> Axis {
+	pub const fn axis(self) -> Axis {
 		match self {
 			Self::Right | Self::Left => Axis::X,
 			Self::Up | Self::Down => Axis::Y,

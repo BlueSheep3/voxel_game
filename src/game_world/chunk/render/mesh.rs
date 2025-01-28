@@ -26,7 +26,7 @@ struct BlockMeshInfo {
 pub fn create_chunk_mesh(
 	chunk: Chunk,
 	blocks_mask: AxisMap<[[u64; CHUNK_LENGTH]; CHUNK_LENGTH]>,
-	block_models: &HashMap<BlockId, BlockModel<usize>>,
+	block_models: HashMap<BlockId, BlockModel<usize>>,
 ) -> Mesh {
 	// benchmarking of creating the chunk mesh
 	let start_time = Instant::now();
@@ -46,7 +46,7 @@ pub fn create_chunk_mesh(
 		})
 		.flat_map(|(pos, cuboid, should_cull)| {
 			let culled = if should_cull {
-				get_culled_faces_at(chunk, todo!(), pos, block_models)
+				get_culled_faces_at(&chunk, todo!(), pos, &block_models)
 			} else {
 				// lazy approach of not culling anything if it's not a full block
 				// TODO cull those faces that are still covered up
