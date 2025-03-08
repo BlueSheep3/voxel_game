@@ -3,8 +3,8 @@ use crate::{
 	axis::AxisMap,
 	bench::BenchName,
 	block::BlockId,
-	block_model::{BlockModel, BlockModelCuboid, ATTRIBUTE_BASE_VOXEL_INDICES},
-	face::{Face, FaceMap, FaceMask},
+	block_model::{BlockFaceData, BlockModel, ATTRIBUTE_BASE_VOXEL_INDICES},
+	face::{Face, FaceMap},
 	game_world::chunk::{Chunk, CHUNK_LENGTH},
 	pos::BlockInChunkPos,
 };
@@ -14,58 +14,79 @@ use bevy::{
 };
 use std::{collections::HashMap, time::Instant};
 
-struct BlockMeshInfo {
-	/// the shape of the cube mesh
-	cuboid: BlockModelCuboid<usize>,
-	/// which faces of the cubes should not be rendered to improve preformance
-	culled: FaceMask,
+struct BlockFaceInfo {
+	/// which way this face is facing
+	face: Face,
+	/// the shape and texture of this face
+	data: BlockFaceData<usize>,
 	/// how much this block is offset from `(0,0,0)` in this chunk
 	pos: BlockInChunkPos,
 }
 
 pub fn create_chunk_mesh(
 	chunk: Chunk,
-	blocks_mask: AxisMap<[[u64; CHUNK_LENGTH]; CHUNK_LENGTH]>,
+	blocks_mask: Box<AxisMap<[[u64; CHUNK_LENGTH]; CHUNK_LENGTH]>>,
 	block_models: HashMap<BlockId, BlockModel<usize>>,
 ) -> Mesh {
 	// benchmarking of creating the chunk mesh
 	let start_time = Instant::now();
 
-	// TODO dont iterate over every block
-	let meshes = chunk
-		.blocks
-		.iter_xyz()
-		.flat_map(|(pos, block)| {
-			let block_model = block_models.get(&block.id).unwrap_or_else(|| {
-				panic!("tried to get the model of block with id {:?}", block.id)
-			});
-			block_model
-				.cuboids
-				.iter()
-				.map(move |cuboid| (pos, cuboid, block_model.should_cull))
-		})
-		.flat_map(|(pos, cuboid, should_cull)| {
-			let culled = if should_cull {
-				get_culled_faces_at(&chunk, todo!(), pos, &block_models)
-			} else {
-				// lazy approach of not culling anything if it's not a full block
-				// TODO cull those faces that are still covered up
-				FaceMask::none()
-			};
+	// currently this has to iterate over the masks twice per axis, since there are 2 faces.
+	// im not sure if this has worse (maybe better?) performance than if
+	// you iterated over every axis exactly once.
+	let culled_blocks_mask = FaceMap::from_map(|face| {
+		// `>> 1` because the negative chunk neighbour's block takes up 1 bit at the edge.
+		// the cast to `u32` cuts of the positive chunk neighbour's bit.
+		let culling = if face.is_pos() {
+			|mask: u64| ((mask & !(mask >> 1)) >> 1) as u32
+		} else {
+			|mask: u64| ((mask & !(mask << 1)) >> 1) as u32
+		};
+		// TODO test wether the usage of `map` is bad for performance
+		blocks_mask[face.axis()].map(|array| array.map(culling))
+	});
 
-			// dont need to create a mesh if everything is culled away
-			if culled.is_all() {
-				return None;
+	let mut all_faces = FaceMap::from_map(|_| Vec::new());
+	for (face, array2d) in culled_blocks_mask.iter_face() {
+		for (i, array) in array2d.iter().enumerate() {
+			for (j, mask) in array.iter().enumerate() {
+				let mut mask = *mask;
+				let mut k = 0;
+				while mask != 0 {
+					let zeros = mask.trailing_zeros();
+					mask = (mask >> zeros) & !1;
+					k += zeros;
+
+					// FIXME use the correct coordinates
+					let pos = BlockInChunkPos {
+						x: i as u8,
+						y: j as u8,
+						z: k as u8,
+					};
+					let block = chunk.blocks[pos];
+					let block_model = block_models.get(&block.id).unwrap_or_else(|| {
+						panic!("tried to get the model of block with id {:?}", block.id)
+					});
+					// mapping the block positions here might seem like unnecessary
+					// duplication of this data, but most blocks only have a single face
+					// per direction, meaning that most of the time this wont be duplicated.
+					// the only way to not duplicate the `pos` would be to store the actual
+					// Vec inside `all_faces`, which would introduce indirection and all
+					// the extra data needed to store a Vec.
+					all_faces[face].extend(block_model.faces[face].iter().map(|data| (data, pos)));
+				}
 			}
+		}
+	}
 
-			let info = BlockMeshInfo {
-				cuboid: cuboid.clone(),
-				culled,
-				pos,
-			};
-			let mesh = create_cube_mesh(info);
-			Some(mesh)
-		});
+	let meshes = all_faces.iter_face().flat_map(|(face, datas)| {
+		datas.iter().map({
+			move |&(&data, pos)| {
+				let info = BlockFaceInfo { face, data, pos };
+				create_face_mesh(info)
+			}
+		})
+	});
 
 	let combined_meshes = combine_meshes(meshes);
 
@@ -74,96 +95,51 @@ pub fn create_chunk_mesh(
 	combined_meshes
 }
 
-// TODO this function will be completely replaced
-fn get_culled_faces_at(
-	chunk: &Chunk,
-	neighbour_chunks: &FaceMap<Chunk>,
-	pos: BlockInChunkPos,
-	block_models: &HashMap<BlockId, BlockModel<usize>>,
-) -> FaceMask {
-	let mut culled = FaceMask::none();
-
-	macro_rules! cull {
-		($axis:ident, $offset:expr, $face:ident, [$border:expr, $other_border:expr]) => {
-			if pos.$axis == $border as u8 {
-				let chunk = &neighbour_chunks[Face::$face];
-				let mut adjacent_pos = pos;
-				adjacent_pos.$axis = $other_border as u8;
-				let model = &block_models[&chunk.blocks[adjacent_pos].id];
-				if model.should_cull {
-					culled.set(Face::$face);
-				}
-			} else {
-				let pos = IVec3::from(pos) + $offset;
-				let pos: BlockInChunkPos = pos.try_into().unwrap();
-				let model = block_models.get(&chunk.blocks[pos].id).unwrap();
-				if model.should_cull {
-					culled.set(Face::$face);
-				}
-			}
-		};
-	}
-
-	cull!(x, IVec3::X, Right, [CHUNK_LENGTH - 1, 0]);
-	cull!(x, -IVec3::X, Left, [0, CHUNK_LENGTH - 1]);
-	cull!(y, IVec3::Y, Up, [CHUNK_LENGTH - 1, 0]);
-	cull!(y, -IVec3::Y, Down, [0, CHUNK_LENGTH - 1]);
-	cull!(z, IVec3::Z, Back, [CHUNK_LENGTH - 1, 0]);
-	cull!(z, -IVec3::Z, Forward, [0, CHUNK_LENGTH - 1]);
-
-	culled
-}
-
-/// creates the mesh for a cube with different face UVs and culling
-fn create_cube_mesh(block_mesh_info: BlockMeshInfo) -> Mesh {
-	let cuboid = block_mesh_info.cuboid;
-	let culled = block_mesh_info.culled;
-	let offset = block_mesh_info.pos;
+fn create_face_mesh(info: BlockFaceInfo) -> Mesh {
+	let BlockFaceInfo { face, data, pos } = info;
 
 	let mut cube_mesh = Mesh::new(
 		PrimitiveTopology::TriangleList,
 		RenderAssetUsages::default(),
 	);
 
-	let positions = get_cube_mesh_positions(cuboid.min, cuboid.max, offset, culled);
+	let positions = get_face_positions(face, data.min, data.max, pos);
 	cube_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
 
 	// let uvs = get_cube_mesh_uvs(&cuboid, culled);
-	let uvs = get_temp_const_uvs(culled);
+	// let uvs = get_temp_const_uvs(culled);
+	// in the future block models may define different uvs, this is temporary
+	let Rect { min, max } = Rect::from_corners(Vec2::ZERO, Vec2::ONE);
+	let Vec2 { x: x0, y: y0 } = min;
+	let Vec2 { x: x1, y: y1 } = max;
+	let uvs = vec![[x0, y0], [x0, y1], [x1, y1], [x1, y0]];
 	cube_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
 
 	// normals are only required for lighting and this game uses a custom lighting engine
-	// let normals = get_cube_mesh_normals();
+	// let normals = get_face_mesh_normals();
 	// cube_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
 
-	let voxel_indices = get_cube_mesh_voxel_indices(&cuboid, culled);
+	// let voxel_indices = get_cube_mesh_voxel_indices(&cuboid, culled);
+	// all 4 vertices must have the same voxel index, since they belong to the same face
+	let voxel_indices = vec![data.side as u32; 4];
 	cube_mesh.insert_attribute(ATTRIBUTE_BASE_VOXEL_INDICES, voxel_indices);
 
-	let tris = get_cube_mesh_tris(culled);
+	// since we are constructing a single face, we already
+	// know the exact indeces for the 2 triangles
+	let tris = vec![0, 1, 3, 2, 3, 1];
 	cube_mesh.insert_indices(Indices::U32(tris));
 
 	cube_mesh
 }
 
-fn get_cube_mesh_positions(
-	min: Vec3,
-	max: Vec3,
-	offset: BlockInChunkPos,
-	culled: FaceMask,
-) -> Vec<[f32; 3]> {
-	macro_rules! ignore_culled {
-		($culled:ident; $(($face:ident, $([$x:tt, $y:tt, $z:tt]),*));* $(;)?) => {{
-			let mut vec = Vec::new();
-			$(
-				if !$culled.contains(Face::$face) {
-					vec.extend([$([
-						num_to_min_max!($x, x),
-						num_to_min_max!($y, y),
-						num_to_min_max!($z, z),
-					]),*]);
-				}
-			)*
-			vec
+fn get_face_positions(face: Face, min: Vec3, max: Vec3, pos: BlockInChunkPos) -> Vec<[f32; 3]> {
+	macro_rules! min_max {
+		($([$x:tt, $y:tt, $z:tt]),* $(,)?) => {{
+			vec![$([
+				num_to_min_max!($x, x),
+				num_to_min_max!($y, y),
+				num_to_min_max!($z, z),
+			]),*]
 		}};
 	}
 
@@ -176,18 +152,16 @@ fn get_cube_mesh_positions(
 		};
 	}
 
-	let mut positions = ignore_culled! {
-		culled;
-		(Right, [1, 1, 1], [1, 0, 1], [1, 0, 0], [1, 1, 0]);
-		(Left, [0, 1, 0], [0, 0, 0], [0, 0, 1], [0, 1, 1]);
-		(Up, [0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]);
-		(Down, [0, 0, 1], [0, 0, 0], [1, 0, 0], [1, 0, 1]);
-		(Back, [0, 1, 1], [0, 0, 1], [1, 0, 1], [1, 1, 1]);
-		(Forward, [1, 1, 0], [1, 0, 0], [0, 0, 0], [0, 1, 0]);
+	let mut positions = match face {
+		Face::Right => min_max!([1, 1, 1], [1, 0, 1], [1, 0, 0], [1, 1, 0]),
+		Face::Left => min_max!([0, 1, 0], [0, 0, 0], [0, 0, 1], [0, 1, 1]),
+		Face::Up => min_max!([0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]),
+		Face::Down => min_max!([0, 0, 1], [0, 0, 0], [1, 0, 0], [1, 0, 1]),
+		Face::Back => min_max!([0, 1, 1], [0, 0, 1], [1, 0, 1], [1, 1, 1]),
+		Face::Forward => min_max!([1, 1, 0], [1, 0, 0], [0, 0, 0], [0, 1, 0]),
 	};
 
-	let offset = Vec3::from(offset);
-
+	let offset = Vec3::from(pos);
 	for [x, y, z] in &mut positions {
 		*x += offset.x;
 		*y += offset.y;
@@ -195,147 +169,4 @@ fn get_cube_mesh_positions(
 	}
 
 	positions
-}
-
-// TODO use this function for proper uvs, instead of always (0,0) to (1,1)
-#[allow(dead_code)]
-fn get_cube_mesh_uvs(block_model: &BlockModelCuboid<Rect>, culled: FaceMask) -> Vec<[f32; 2]> {
-	// Set-up UV coordinated to point to the upper (V < 0.5), "dirt+grass" part of the texture.
-	// Take a look at the custom image (assets/textures/array_texture.png)
-	// so the UV coords will make more sense
-	// Note: (0.0, 0.0) = Top-Left in UV mapping, (1.0, 1.0) = Bottom-Right in UV mapping
-
-	let sides = block_model.sides;
-
-	let mut uvs = Vec::new();
-
-	fn extend_uvs(
-		uvs: &mut Vec<[f32; 2]>,
-		positions: &FaceMap<Rect>,
-		face: Face,
-		culled: FaceMask,
-	) {
-		if culled.contains(face) {
-			return;
-		}
-		let Rect { min, max } = positions[face];
-		let Vec2 { x: x0, y: y0 } = min;
-		let Vec2 { x: x1, y: y1 } = max;
-		uvs.extend([[x0, y0], [x0, y1], [x1, y1], [x1, y0]]);
-	}
-
-	extend_uvs(&mut uvs, &sides, Face::Right, culled);
-	extend_uvs(&mut uvs, &sides, Face::Left, culled);
-	extend_uvs(&mut uvs, &sides, Face::Up, culled);
-	extend_uvs(&mut uvs, &sides, Face::Down, culled);
-	extend_uvs(&mut uvs, &sides, Face::Back, culled);
-	extend_uvs(&mut uvs, &sides, Face::Forward, culled);
-
-	uvs
-}
-
-fn get_temp_const_uvs(culled: FaceMask) -> Vec<[f32; 2]> {
-	let mut uvs = Vec::new();
-
-	fn extend_uvs(uvs: &mut Vec<[f32; 2]>, face: Face, culled: FaceMask) {
-		if culled.contains(face) {
-			return;
-		}
-		let Rect { min, max } = Rect::from_corners(Vec2::ZERO, Vec2::ONE);
-		let Vec2 { x: x0, y: y0 } = min;
-		let Vec2 { x: x1, y: y1 } = max;
-		uvs.extend([[x0, y0], [x0, y1], [x1, y1], [x1, y0]]);
-	}
-
-	extend_uvs(&mut uvs, Face::Right, culled);
-	extend_uvs(&mut uvs, Face::Left, culled);
-	extend_uvs(&mut uvs, Face::Up, culled);
-	extend_uvs(&mut uvs, Face::Down, culled);
-	extend_uvs(&mut uvs, Face::Back, culled);
-	extend_uvs(&mut uvs, Face::Forward, culled);
-
-	uvs
-}
-
-// not required for this game, because this game uses a custom lighting engine
-#[allow(dead_code)]
-fn get_cube_mesh_normals() -> Vec<[f32; 3]> {
-	// For meshes with flat shading, normals are orthogonal (pointing out) from the direction of
-	// the surface.
-	// Normals are required for correct lighting calculations.
-	// Each array represents a normalized vector, which length should be equal to 1.0.
-
-	// NOTE this is outdated and does not cull anything
-
-	#[rustfmt::skip]
-	let normals = vec![
-		// Normals for the right side (towards +x)
-		[1.0, 0.0, 0.0],
-		[1.0, 0.0, 0.0],
-		[1.0, 0.0, 0.0],
-		[1.0, 0.0, 0.0],
-		// Normals for the left side (towards -x)
-		[-1.0, 0.0, 0.0],
-		[-1.0, 0.0, 0.0],
-		[-1.0, 0.0, 0.0],
-		[-1.0, 0.0, 0.0],
-		// Normals for the up side (towards +y)
-		[0.0, 1.0, 0.0],
-		[0.0, 1.0, 0.0],
-		[0.0, 1.0, 0.0],
-		[0.0, 1.0, 0.0],
-		// Normals for the down side (towards -y)
-		[0.0, -1.0, 0.0],
-		[0.0, -1.0, 0.0],
-		[0.0, -1.0, 0.0],
-		[0.0, -1.0, 0.0],
-		// Normals for the back side (towards +z)
-		[0.0, 0.0, 1.0],
-		[0.0, 0.0, 1.0],
-		[0.0, 0.0, 1.0],
-		[0.0, 0.0, 1.0],
-		// Normals for the forward side (towards -z)
-		[0.0, 0.0, -1.0],
-		[0.0, 0.0, -1.0],
-		[0.0, 0.0, -1.0],
-		[0.0, 0.0, -1.0],
-	];
-
-	normals
-}
-
-fn get_cube_mesh_tris(culled: FaceMask) -> Vec<u32> {
-	// Create the triangles out of the 24 vertices we created.
-	// To construct a square, we need 2 triangles, therefore 12 triangles in total.
-	// To construct a triangle, we need the indices of its 3 defined vertices, adding them one
-	// by one, in a counter-clockwise order (relative to the position of the viewer, the order
-	// should appear counter-clockwise from the front of the triangle, in this case from outside the cube).
-	// Read more about how to correctly build a mesh manually in the Bevy documentation of a Mesh,
-	// further examples and the implementation of the built-in shapes.
-
-	let mut vec = Vec::new();
-	let mut i = 0;
-
-	for face in Face::all() {
-		if culled.contains(face) {
-			continue;
-		}
-		vec.extend([i, i + 1, i + 3, i + 2, i + 3, i + 1]);
-		i += 4;
-	}
-
-	vec
-}
-
-fn get_cube_mesh_voxel_indices(
-	block_model: &BlockModelCuboid<usize>,
-	culled: FaceMask,
-) -> Vec<u32> {
-	Face::all()
-		.filter(|&face| !culled.contains(face))
-		.flat_map(|face| {
-			let voxel_index = block_model.sides[face] as u32;
-			vec![voxel_index; 4]
-		})
-		.collect()
 }

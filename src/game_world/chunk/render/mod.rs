@@ -255,7 +255,7 @@ fn get_blocks_bitmask(
 	chunk: &Chunk,
 	block_models: &HashMap<BlockId, BlockModel<usize>>,
 	neighbour_chunks: FaceMap<&Chunk>,
-) -> AxisMap<[[u64; CHUNK_LENGTH]; CHUNK_LENGTH]> {
+) -> Box<AxisMap<[[u64; CHUNK_LENGTH]; CHUNK_LENGTH]>> {
 	// start out with a completely empty mask
 	let mut blocks_mask = AxisMap::<[[u64; CHUNK_LENGTH]; CHUNK_LENGTH]>::default();
 
@@ -296,7 +296,10 @@ fn get_blocks_bitmask(
 		(x, y) in Axis::Z => [x as u8, y as u8, 0];
 	}
 
-	blocks_mask
+	// box the blocks_mask, so that its cheap to move around,
+	// because its a *lot* of data
+	// TODO check if this has better performance if this is put into a box earlier
+	Box::new(blocks_mask)
 }
 
 fn spawn_chunk_meshes_from_tasks(

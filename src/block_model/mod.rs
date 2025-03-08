@@ -46,30 +46,32 @@ pub struct GlobalTexture {
 
 #[derive(Asset, TypePath, Debug, Clone, Deserialize)]
 pub struct BlockModelAsset<Side: TypePath + Send + Sync> {
+	// TODO cull individual faces
 	pub should_cull: bool,
-	pub cuboids: Vec<BlockModelAssetCuboid<Side>>,
+	/// all faces of this model, mapped by what direction they face towards
+	pub faces: FaceMap<Vec<Side>>,
 }
 
-#[derive(TypePath, Debug, Clone, Deserialize)]
-pub struct BlockModelAssetCuboid<Side> {
-	min: Vec3,
-	max: Vec3,
-	/// the positions for each face, normalized to the global texture
-	pub sides: FaceMap<Side>,
+#[derive(Asset, TypePath, Debug, Clone, Deserialize)]
+pub struct BlockFaceDataAsset<Side: TypePath + Send + Sync> {
+	pub min: Vec3,
+	pub max: Vec3,
+	pub side: Side,
 }
 
 #[derive(Debug, Clone)]
 pub struct BlockModel<Side> {
+	// TODO cull individual faces
 	pub should_cull: bool,
-	pub cuboids: Vec<BlockModelCuboid<Side>>,
+	/// all faces of this model, mapped by what direction they face towards
+	pub faces: FaceMap<Vec<BlockFaceData<Side>>>,
 }
 
-#[derive(Debug, Clone)]
-pub struct BlockModelCuboid<Side> {
+#[derive(Debug, Clone, Copy)]
+pub struct BlockFaceData<Side> {
 	pub min: Vec3,
 	pub max: Vec3,
-	/// the positions for each face, normalized to the global texture
-	pub sides: FaceMap<Side>,
+	pub side: Side,
 }
 
 #[derive(SubStates, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
@@ -172,7 +174,7 @@ fn get_textures(
 		let mut face_indeces = Vec::new();
 
 		for (i, cuboid) in block_model.cuboids.iter().enumerate() {
-			for (side, face) in cuboid.sides.iter_face() {
+			for (face, side) in cuboid.sides.iter_face() {
 				if let Some(&i) = used_paths.get(side) {
 					face_indeces.push(i);
 					continue;

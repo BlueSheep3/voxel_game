@@ -92,9 +92,9 @@ impl<T> AxisMap<T> {
 		self.0.into_iter()
 	}
 
-	pub fn iter_axis(&self) -> impl Iterator<Item = (&T, Axis)> {
+	pub fn iter_axis(&self) -> impl Iterator<Item = (Axis, &T)> {
 		use Axis as A;
-		self.0.iter().zip([A::X, A::Y, A::Z])
+		[A::X, A::Y, A::Z].into_iter().zip(&self.0)
 	}
 
 	pub fn map<U>(self, f: impl FnMut(T) -> U) -> AxisMap<U> {
@@ -104,7 +104,7 @@ impl<T> AxisMap<T> {
 	/// creates a new AxisMap by mapping over every axis
 	pub fn from_map(f: impl FnMut(Axis) -> T) -> Self {
 		use Axis as A;
-		[A::X, A::Y, A::Z].map(f).into()
+		Self([A::X, A::Y, A::Z].map(f))
 	}
 }
 

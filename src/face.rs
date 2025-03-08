@@ -48,6 +48,14 @@ impl Face {
 		}
 	}
 
+	/// is this face pointing in the positive direction?
+	pub const fn is_pos(self) -> bool {
+		match self {
+			Self::Right | Self::Up | Self::Back => true,
+			Self::Left | Self::Down | Self::Forward => false,
+		}
+	}
+
 	pub const fn axis(self) -> Axis {
 		match self {
 			Self::Right | Self::Left => Axis::X,
@@ -116,11 +124,11 @@ impl<T> FaceMap<T> {
 		self.0.into_iter()
 	}
 
-	pub fn iter_face(&self) -> impl Iterator<Item = (&T, Face)> {
+	pub fn iter_face(&self) -> impl Iterator<Item = (Face, &T)> {
 		use Face as F;
-		self.0
-			.iter()
-			.zip([F::Right, F::Left, F::Up, F::Down, F::Back, F::Forward])
+		[F::Right, F::Left, F::Up, F::Down, F::Back, F::Forward]
+			.into_iter()
+			.zip(&self.0)
 	}
 
 	pub fn map<U>(self, f: impl FnMut(T) -> U) -> FaceMap<U> {
@@ -130,9 +138,7 @@ impl<T> FaceMap<T> {
 	/// creates a new FaceMap by mapping over every face
 	pub fn from_map(f: impl FnMut(Face) -> T) -> Self {
 		use Face as F;
-		[F::Right, F::Left, F::Up, F::Down, F::Back, F::Forward]
-			.map(f)
-			.into()
+		Self([F::Right, F::Left, F::Up, F::Down, F::Back, F::Forward].map(f))
 	}
 }
 
