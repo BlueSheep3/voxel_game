@@ -1,17 +1,35 @@
 (
 	should_cull: true,
-	cuboids: [
-		(
-			min: ( 0.0, 0.0, 0.0 ),
+	faces: ((
+		[(
+			min: ( 1.0, 0.0, 0.0 ),
 			max: ( 1.0, 1.0, 1.0 ),
-			sides: ((
-				"GrassBlockSide",
-				"GrassBlockSide",
-				"GrassBlockTopColored",
-				"Dirt",
-				"GrassBlockSide",
-				"GrassBlockSide",
-			)),
-		),
-	],
+			side: "GrassBlockSide",
+		)],
+		[(
+			min: ( 0.0, 0.0, 0.0 ),
+			max: ( 0.0, 1.0, 1.0 ),
+			side: "GrassBlockSide",
+		)],
+		[(
+			min: ( 0.0, 1.0, 0.0 ),
+			max: ( 1.0, 1.0, 1.0 ),
+			side: "GrassBlockTopColored",
+		)],
+		[(
+			min: ( 0.0, 0.0, 0.0 ),
+			max: ( 1.0, 0.0, 1.0 ),
+			side: "Dirt",
+		)],
+		[(
+			min: ( 0.0, 0.0, 1.0 ),
+			max: ( 1.0, 1.0, 1.0 ),
+			side: "GrassBlockSide",
+		)],
+		[(
+			min: ( 0.0, 0.0, 0.0 ),
+			max: ( 1.0, 1.0, 0.0 ),
+			side: "GrassBlockSide",
+		)],
+	)),
 )

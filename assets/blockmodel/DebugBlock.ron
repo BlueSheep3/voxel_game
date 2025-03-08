@@ -1,17 +1,35 @@
 (
 	should_cull: true,
-	cuboids: [
-		(
-			min: ( 0.0, 0.0, 0.0 ),
+	faces: ((
+		[(
+			min: ( 1.0, 0.0, 0.0 ),
 			max: ( 1.0, 1.0, 1.0 ),
-			sides: ((
-				"DebugBlockX+",
-				"DebugBlockX-",
-				"DebugBlockY+",
-				"DebugBlockY-",
-				"DebugBlockZ+",
-				"DebugBlockZ-",
-			)),
-		),
-	],
+			side: "DebugBlockX+",
+		)],
+		[(
+			min: ( 0.0, 0.0, 0.0 ),
+			max: ( 0.0, 1.0, 1.0 ),
+			side: "DebugBlockX-",
+		)],
+		[(
+			min: ( 0.0, 1.0, 0.0 ),
+			max: ( 1.0, 1.0, 1.0 ),
+			side: "DebugBlockY+",
+		)],
+		[(
+			min: ( 0.0, 0.0, 0.0 ),
+			max: ( 1.0, 0.0, 1.0 ),
+			side: "DebugBlockY-",
+		)],
+		[(
+			min: ( 0.0, 0.0, 1.0 ),
+			max: ( 1.0, 1.0, 1.0 ),
+			side: "DebugBlockZ+",
+		)],
+		[(
+			min: ( 0.0, 0.0, 0.0 ),
+			max: ( 1.0, 1.0, 0.0 ),
+			side: "DebugBlockZ-",
+		)],
+	)),
 )
