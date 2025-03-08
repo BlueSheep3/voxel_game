@@ -49,7 +49,7 @@ pub struct BlockModelAsset<Side: TypePath + Send + Sync> {
 	// TODO cull individual faces
 	pub should_cull: bool,
 	/// all faces of this model, mapped by what direction they face towards
-	pub faces: FaceMap<Vec<Side>>,
+	pub faces: FaceMap<Vec<BlockFaceDataAsset<Side>>>,
 }
 
 #[derive(Asset, TypePath, Debug, Clone, Deserialize)]
@@ -97,24 +97,22 @@ fn load_images(
 
 	let block_models = get_block_models().unwrap();
 	for (id, block_model) in block_models {
-		let cuboids = block_model
-			.cuboids
-			.iter()
-			.map(|cuboid| {
-				let sides = cuboid
-					.sides
-					.clone()
-					.map(|side| asset_server.load(format!("sprite/{}.png", side)));
-				BlockModelCuboid {
-					min: cuboid.min,
-					max: cuboid.max,
-					sides,
-				}
-			})
-			.collect::<Vec<_>>();
+		let faces = block_model.faces.map(|datas| {
+			datas
+				.into_iter()
+				.map(|data| {
+					let side = asset_server.load(format!("sprite/{}.png", data.side));
+					BlockFaceData {
+						min: data.min,
+						max: data.max,
+						side,
+					}
+				})
+				.collect::<Vec<_>>()
+		});
 		let model = BlockModel {
 			should_cull: block_model.should_cull,
-			cuboids,
+			faces,
 		};
 		block_images.images.insert(id, model);
 	}
@@ -126,12 +124,12 @@ fn check_finished_loading_images(
 	mut loading_state: ResMut<NextState<LoadingState>>,
 ) {
 	let image_is_loaded = |i| asset_server.load_state(i).is_loaded();
-	let all_loaded = block_images.images.iter().all(|(_, model)| {
-		model
-			.cuboids
-			.iter()
-			.all(|cuboid| cuboid.sides.iter().all(image_is_loaded))
-	});
+	let all_loaded = block_images
+		.images
+		.values()
+		.flat_map(|model| model.faces.iter())
+		.flatten()
+		.all(|x| image_is_loaded(&x.side));
 	if all_loaded {
 		loading_state.set(LoadingState::SettingGlobalTexture);
 	}
@@ -171,49 +169,50 @@ fn get_textures(
 
 	let mut index = 0;
 	for (block_id, block_model) in block_models {
-		let mut face_indeces = Vec::new();
+		let mut face_indeces = FaceMap::from_map(|_| Vec::new());
 
-		for (i, cuboid) in block_model.cuboids.iter().enumerate() {
-			for (face, side) in cuboid.sides.iter_face() {
-				if let Some(&i) = used_paths.get(side) {
-					face_indeces.push(i);
+		for (face, sides) in block_model.faces.iter_face() {
+			for (i, data) in sides.iter().enumerate() {
+				if let Some(&i) = used_paths.get(&data.side) {
+					face_indeces[face].push(i);
 					continue;
 				}
 
 				let model = &block_images.images[&block_id];
-				let block_image = &model.cuboids[i].sides[face];
-				let image = images.get(block_image).unwrap();
+				let block_image = &model.faces[face][i];
+				let image = images.get(&block_image.side).unwrap();
 				block_textures.push(image.clone());
-				used_paths.insert(side.clone(), index);
+				used_paths.insert(data.side.clone(), index);
 
-				face_indeces.push(index);
+				face_indeces[face].push(index);
 				index += 1;
 			}
 		}
 
-		let model = faces_into_model_indices(&face_indeces, &block_model);
+		let model = faces_into_model_indices(face_indeces, &block_model);
 		mappings.insert(block_id, model);
 	}
 	(block_textures, mappings)
 }
 
 fn faces_into_model_indices(
-	face_indeces: &[usize],
+	face_indeces: FaceMap<Vec<usize>>,
 	block_model: &BlockModelAsset<String>,
 ) -> BlockModel<usize> {
-	let cuboid_maps = face_indeces
-		.chunks_exact(6)
-		.map(|chunk| FaceMap::try_from(chunk.to_vec()).unwrap())
-		.enumerate()
-		.map(|(i, face_maps)| BlockModelCuboid {
-			min: block_model.cuboids[i].min,
-			max: block_model.cuboids[i].max,
-			sides: face_maps,
-		})
-		.collect::<Vec<_>>();
+	let faces = face_indeces.face_map(|face, indeces| {
+		indeces
+			.iter()
+			.enumerate()
+			.map(|(i, &side)| BlockFaceData {
+				min: block_model.faces[face][i].min,
+				max: block_model.faces[face][i].max,
+				side,
+			})
+			.collect::<Vec<_>>()
+	});
 	BlockModel {
 		should_cull: block_model.should_cull,
-		cuboids: cuboid_maps,
+		faces,
 	}
 }
 
@@ -284,7 +283,7 @@ enum GlobalTextureError {
 	IntoDynamicImage,
 	#[error("image was wrong size: should be {0}, but got {1}")]
 	ImageWrongSize(UVec2, UVec2),
-	#[error("uknown block name: {0}")]
+	#[error("unknown block name: {0}")]
 	UknownBlockName(String),
 	#[error("couldn't get file stem")]
 	NoFileStem,

@@ -1,5 +1,6 @@
 use super::combine_mesh::combine_meshes;
 use crate::{
+	axis::Axis,
 	axis::AxisMap,
 	bench::BenchName,
 	block::BlockId,
@@ -57,12 +58,7 @@ pub fn create_chunk_mesh(
 					mask = (mask >> zeros) & !1;
 					k += zeros;
 
-					// FIXME use the correct coordinates
-					let pos = BlockInChunkPos {
-						x: i as u8,
-						y: j as u8,
-						z: k as u8,
-					};
+					let pos = bitmask_pos_to_world(face.axis(), i, j, k);
 					let block = chunk.blocks[pos];
 					let block_model = block_models.get(&block.id).unwrap_or_else(|| {
 						panic!("tried to get the model of block with id {:?}", block.id)
@@ -95,6 +91,22 @@ pub fn create_chunk_mesh(
 	combined_meshes
 }
 
+fn bitmask_pos_to_world(axis: Axis, i: usize, j: usize, k: u32) -> BlockInChunkPos {
+	// i and j are the two coordinates that are normally looped over.
+	// i represent an axis lower than j.
+	// k represent the axis along the bitmask itself (along `axis`).
+
+	let [i, j, k] = [i as u8, j as u8, k as u8];
+
+	let [x, y, z] = match axis {
+		Axis::X => [k, i, j],
+		Axis::Y => [i, k, j],
+		Axis::Z => [i, j, k],
+	};
+
+	BlockInChunkPos { x, y, z }
+}
+
 fn create_face_mesh(info: BlockFaceInfo) -> Mesh {
 	let BlockFaceInfo { face, data, pos } = info;
 
@@ -106,8 +118,6 @@ fn create_face_mesh(info: BlockFaceInfo) -> Mesh {
 	let positions = get_face_positions(face, data.min, data.max, pos);
 	cube_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
 
-	// let uvs = get_cube_mesh_uvs(&cuboid, culled);
-	// let uvs = get_temp_const_uvs(culled);
 	// in the future block models may define different uvs, this is temporary
 	let Rect { min, max } = Rect::from_corners(Vec2::ZERO, Vec2::ONE);
 	let Vec2 { x: x0, y: y0 } = min;
@@ -115,11 +125,6 @@ fn create_face_mesh(info: BlockFaceInfo) -> Mesh {
 	let uvs = vec![[x0, y0], [x0, y1], [x1, y1], [x1, y0]];
 	cube_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
 
-	// normals are only required for lighting and this game uses a custom lighting engine
-	// let normals = get_face_mesh_normals();
-	// cube_mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-
-	// let voxel_indices = get_cube_mesh_voxel_indices(&cuboid, culled);
 	// all 4 vertices must have the same voxel index, since they belong to the same face
 	let voxel_indices = vec![data.side as u32; 4];
 	cube_mesh.insert_attribute(ATTRIBUTE_BASE_VOXEL_INDICES, voxel_indices);

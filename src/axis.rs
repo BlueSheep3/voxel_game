@@ -101,6 +101,13 @@ impl<T> AxisMap<T> {
 		AxisMap(self.0.map(f))
 	}
 
+	/// maps over all elements along with which axis maps to them
+	pub fn axis_map<U>(self, mut func: impl FnMut(Axis, T) -> U) -> AxisMap<U> {
+		let [x, y, z] = self.0;
+		let new_map = [func(Axis::X, x), func(Axis::Y, y), func(Axis::Z, z)];
+		AxisMap(new_map)
+	}
+
 	/// creates a new AxisMap by mapping over every axis
 	pub fn from_map(f: impl FnMut(Axis) -> T) -> Self {
 		use Axis as A;

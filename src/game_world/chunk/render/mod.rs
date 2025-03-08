@@ -272,15 +272,19 @@ fn get_blocks_bitmask(
 
 	// fill in the edges of the neighbouring chunks
 	macro_rules! neighbours {
-		($(($a:ident, $b:ident) in $axis:expr => [$x:expr, $y:expr, $z:expr]);* $(;)?) => {
+		($(($a:ident, $b:ident) in ($axis:expr, $axis_name:ident)
+		=> [$x:expr, $y:expr, $z:expr]);* $(;)?) => {
 			$(
 			for $a in 0..CHUNK_LENGTH {
 				for $b in 0..CHUNK_LENGTH {
-					let pos = BlockInChunkPos::new($x, $y, $z);
+					let mut pos = BlockInChunkPos::new($x, $y, $z);
+
+					pos.$axis_name = CHUNK_LENGTH as u8 - 1;
 					let block = neighbour_chunks[$axis.face_neg()].blocks[pos];
 					if block_models[&block.id].should_cull {
 						blocks_mask[$axis][$a][$b] |= 1;
 					}
+					pos.$axis_name = 0;
 					let block = neighbour_chunks[$axis.face_pos()].blocks[pos];
 					if block_models[&block.id].should_cull {
 						blocks_mask[$axis][$a][$b] |= 1 << (CHUNK_LENGTH + 1);
@@ -291,9 +295,9 @@ fn get_blocks_bitmask(
 		};
 	}
 	neighbours! {
-		(y, z) in Axis::X => [0, y as u8, z as u8];
-		(x, z) in Axis::Y => [x as u8, 0, z as u8];
-		(x, y) in Axis::Z => [x as u8, y as u8, 0];
+		(y, z) in (Axis::X, x) => [0, y as u8, z as u8];
+		(x, z) in (Axis::Y, y) => [x as u8, 0, z as u8];
+		(x, y) in (Axis::Z, z) => [x as u8, y as u8, 0];
 	}
 
 	// box the blocks_mask, so that its cheap to move around,

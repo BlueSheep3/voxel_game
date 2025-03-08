@@ -135,6 +135,20 @@ impl<T> FaceMap<T> {
 		FaceMap(self.0.map(f))
 	}
 
+	/// maps over all elements along with which face maps to them
+	pub fn face_map<U>(self, mut func: impl FnMut(Face, T) -> U) -> FaceMap<U> {
+		let [r, l, u, d, b, f] = self.0;
+		let new_map = [
+			func(Face::Right, r),
+			func(Face::Left, l),
+			func(Face::Up, u),
+			func(Face::Down, d),
+			func(Face::Back, b),
+			func(Face::Forward, f),
+		];
+		FaceMap(new_map)
+	}
+
 	/// creates a new FaceMap by mapping over every face
 	pub fn from_map(f: impl FnMut(Face) -> T) -> Self {
 		use Face as F;
