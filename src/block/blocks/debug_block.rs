@@ -1,6 +1,7 @@
 use crate::{
 	block::{
-		block_trait::{BlockTrait, BlockWithoutData}, BlockData, BlockId
+		block_trait::{BlockTrait, BlockWithoutData},
+		BlockData, BlockId,
 	},
 	cuboid::Cuboid,
 };

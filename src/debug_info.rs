@@ -4,7 +4,7 @@ use crate::{
 	GlobalState,
 };
 use bevy::prelude::*;
-use std::f32::consts::TAU;
+use std::{collections::VecDeque, f32::consts::TAU};
 
 pub struct DebugInfoPlugin;
 
@@ -56,13 +56,37 @@ fn update_debug_info_text(
 	cam: Query<&Transform, With<Camera3d>>,
 	player: Query<(&Transform, &Velocity), With<Player>>,
 	entities: Query<Entity>,
+	mut delta_time_tracker: Local<VecDeque<f32>>,
 ) {
 	let mut text = String::new();
 
 	{
-		let fps = (1.0 / time.delta_secs()).round();
+		let delta_time = time.delta_secs();
+		// guarantees that delta_time_tracker is non empty
+		delta_time_tracker.push_back(delta_time);
+		if delta_time_tracker.len() > 60 {
+			delta_time_tracker.pop_front();
+		}
+		let to_fps = |dt: f32| (1.0 / dt).round();
 
-		text.push_str(&format!("FPS: {fps:03}\n"));
+		let min = *delta_time_tracker
+			.iter()
+			.min_by(|a, b| a.total_cmp(b))
+			.unwrap_or(&1.);
+		let max = *delta_time_tracker
+			.iter()
+			.max_by(|a, b| a.total_cmp(b))
+			.unwrap_or(&1.);
+		let avg = delta_time_tracker.iter().sum::<f32>() / delta_time_tracker.len() as f32;
+
+		// min and max are flipped, because these show fps instead of ms
+		text.push_str(&format!(
+			"FPS: {:03}  avg: {:03}  min: {:03}  max: {:03}\n",
+			to_fps(delta_time),
+			to_fps(avg),
+			to_fps(max),
+			to_fps(min)
+		));
 	}
 
 	{

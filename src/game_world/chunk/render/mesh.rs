@@ -24,9 +24,12 @@ struct BlockFaceInfo {
 	pos: BlockInChunkPos,
 }
 
+pub type ChunkArray2D<T> = [[T; CHUNK_LENGTH]; CHUNK_LENGTH];
+
 pub fn create_chunk_mesh(
 	chunk: Chunk,
-	blocks_mask: Box<AxisMap<[[u64; CHUNK_LENGTH]; CHUNK_LENGTH]>>,
+	blocks_mask: Box<AxisMap<ChunkArray2D<u64>>>,
+	non_culled_mask: Box<ChunkArray2D<u32>>,
 	block_models: HashMap<BlockId, BlockModel<usize>>,
 ) -> Mesh {
 	// benchmarking of creating the chunk mesh
@@ -47,6 +50,7 @@ pub fn create_chunk_mesh(
 		blocks_mask[face.axis()].map(|array| array.map(culling))
 	});
 
+	// extract the actual BlockFaceData from these bitmasks and the chunk data
 	let mut all_faces = FaceMap::from_map(|_| Vec::new());
 	for (face, array2d) in culled_blocks_mask.iter_face() {
 		for (i, array) in array2d.iter().enumerate() {
@@ -69,6 +73,29 @@ pub fn create_chunk_mesh(
 					// the only way to not duplicate the `pos` would be to store the actual
 					// Vec inside `all_faces`, which would introduce indirection and all
 					// the extra data needed to store a Vec.
+					all_faces[face].extend(block_model.faces[face].iter().map(|data| (data, pos)));
+				}
+			}
+		}
+	}
+	// basically the same thing as the for loop above,
+	// but adjusted for `non_culled_mask`
+	for (x, array) in non_culled_mask.iter().enumerate() {
+		for (y, mask) in array.iter().enumerate() {
+			let mut mask = *mask;
+			let mut z = 0;
+			while mask != 0 {
+				let zeros = mask.trailing_zeros();
+				mask = (mask >> zeros) & !1;
+				z += zeros;
+
+				let pos = BlockInChunkPos::new(x as u8, y as u8, z as u8);
+				let block = chunk.blocks[pos];
+				let block_model = block_models.get(&block.id).unwrap_or_else(|| {
+					panic!("tried to get the model of block with id {:?}", block.id)
+				});
+				for face in Face::all() {
+					// see previous comment about this
 					all_faces[face].extend(block_model.faces[face].iter().map(|data| (data, pos)));
 				}
 			}
