@@ -1,9 +1,11 @@
 use super::combine_mesh::combine_meshes;
 use crate::{
-	axis::Axis,
-	axis::AxisMap,
+	axis::{Axis, AxisMap},
 	bench::BenchName,
-	block::BlockId,
+	block::{
+		prelude::{Air, BlockTrait, BlockWithoutData},
+		Block, BlockId,
+	},
 	block_model::{BlockFaceData, BlockModel, ATTRIBUTE_BASE_VOXEL_INDICES},
 	face::{Face, FaceMap},
 	game_world::chunk::{Chunk, CHUNK_LENGTH},
@@ -26,14 +28,19 @@ struct BlockFaceInfo {
 
 pub type ChunkArray2D<T> = [[T; CHUNK_LENGTH]; CHUNK_LENGTH];
 
+pub type ChunkPadding = FaceMap<Box<ChunkArray2D<Block>>>;
+
 pub fn create_chunk_mesh(
 	chunk: Chunk,
-	blocks_mask: Box<AxisMap<ChunkArray2D<u64>>>,
-	non_culled_mask: Box<ChunkArray2D<u32>>,
+	chunk_padding: ChunkPadding,
 	block_models: HashMap<BlockId, BlockModel<usize>>,
 ) -> Mesh {
 	// benchmarking of creating the chunk mesh
 	let start_time = Instant::now();
+
+	let bitmask_time = Instant::now();
+	let (blocks_mask, non_culled_mask) = get_blocks_bitmask(&chunk, &block_models, chunk_padding);
+	crate::bench::push_time(BenchName::BitMask, bitmask_time.elapsed());
 
 	// currently this has to iterate over the masks twice per axis, since there are 2 faces.
 	// im not sure if this has worse (maybe better?) performance than if
@@ -116,6 +123,100 @@ pub fn create_chunk_mesh(
 	crate::bench::push_time(BenchName::CreateChunkMesh, start_time.elapsed());
 
 	combined_meshes
+}
+
+pub fn chunk_padding_from_neighbour_chunks(neighbour_chunks: FaceMap<&Chunk>) -> ChunkPadding {
+	let mut chunk_padding =
+		FaceMap::from_map(|_| Box::new([[Air::BLOCK; CHUNK_LENGTH]; CHUNK_LENGTH]));
+
+	macro_rules! neighbours {
+		($(($a:ident, $b:ident) in ($axis:expr, $axis_name:ident)
+		=> [$x:expr, $y:expr, $z:expr]);* $(;)?) => {
+			$(
+			for $a in 0..CHUNK_LENGTH {
+				for $b in 0..CHUNK_LENGTH {
+					let mut pos = BlockInChunkPos::new($x, $y, $z);
+
+					pos.$axis_name = CHUNK_LENGTH as u8 - 1;
+					let block = neighbour_chunks[$axis.face_neg()].blocks[pos];
+					chunk_padding[$axis.face_neg()][$a][$b] = block;
+
+					pos.$axis_name = 0;
+					let block = neighbour_chunks[$axis.face_pos()].blocks[pos];
+					chunk_padding[$axis.face_pos()][$a][$b] = block;
+				}
+			}
+			)*
+		};
+	}
+	neighbours! {
+		(y, z) in (Axis::X, x) => [0, y as u8, z as u8];
+		(x, z) in (Axis::Y, y) => [x as u8, 0, z as u8];
+		(x, y) in (Axis::Z, z) => [x as u8, y as u8, 0];
+	}
+	chunk_padding
+}
+
+/// Will generate 3 bitmasks for this chunk, one for each axis.
+/// The bits just mean whether a cullable block is there or not.
+/// The 0th bit is an edge block of the negative facing neighbour chunk,
+/// while the 33rd bit is the edge block of the opposite chunk,
+/// and all bits in between (1st to 32nd inclusive) are the current chunk.
+fn get_blocks_bitmask(
+	chunk: &Chunk,
+	block_models: &HashMap<BlockId, BlockModel<usize>>,
+	chunk_padding: ChunkPadding,
+) -> (Box<AxisMap<ChunkArray2D<u64>>>, Box<ChunkArray2D<u32>>) {
+	// start out with a completely empty mask
+	let mut blocks_mask = <AxisMap<ChunkArray2D<u64>>>::default();
+	let mut non_culled_mask = <ChunkArray2D<u32>>::default();
+
+	let inner_time = Instant::now();
+	// fill in the current chunk
+	for (pos, block) in chunk.blocks.iter_xyz() {
+		let BlockInChunkPos { x, y, z } = pos;
+		let [x, y, z] = [x as usize, y as usize, z as usize];
+		if block_models[&block.id].should_cull {
+			blocks_mask[Axis::X][y][z] |= 1 << (x + 1);
+			blocks_mask[Axis::Y][x][z] |= 1 << (y + 1);
+			blocks_mask[Axis::Z][x][y] |= 1 << (z + 1);
+		} else if block.id != Air::BLOCK_ID {
+			non_culled_mask[x][y] |= 1 << z;
+		}
+	}
+	crate::bench::push_time(BenchName::BitMaskInner, inner_time.elapsed());
+
+	let border_time = Instant::now();
+	// fill in the edges of the neighbouring chunks
+	macro_rules! neighbours {
+		($(($a:ident, $b:ident) in ($axis:expr, $axis_name:ident));* $(;)?) => {
+			$(
+			for $a in 0..CHUNK_LENGTH {
+				for $b in 0..CHUNK_LENGTH {
+					let block = chunk_padding[$axis.face_neg()][$a][$b];
+					if block_models[&block.id].should_cull {
+						blocks_mask[$axis][$a][$b] |= 1;
+					}
+					let block = chunk_padding[$axis.face_pos()][$a][$b];
+					if block_models[&block.id].should_cull {
+						blocks_mask[$axis][$a][$b] |= 1 << (CHUNK_LENGTH + 1);
+					}
+				}
+			}
+			)*
+		};
+	}
+	neighbours! {
+		(y, z) in (Axis::X, x);
+		(x, z) in (Axis::Y, y);
+		(x, y) in (Axis::Z, z);
+	}
+	crate::bench::push_time(BenchName::BitMaskBorder, border_time.elapsed());
+
+	// box the blocks_mask, so that its cheap to move around,
+	// because its a *lot* of data
+	// TODO check if this has better performance if this is put into a box earlier
+	(Box::new(blocks_mask), Box::new(non_culled_mask))
 }
 
 fn bitmask_pos_to_world(axis: Axis, i: usize, j: usize, k: u32) -> BlockInChunkPos {
