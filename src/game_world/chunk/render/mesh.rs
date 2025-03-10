@@ -38,9 +38,9 @@ pub fn create_chunk_mesh(
 	// benchmarking of creating the chunk mesh
 	let start_time = Instant::now();
 
-	let bitmask_time = Instant::now();
+	// let bitmask_time = Instant::now();
 	let (blocks_mask, non_culled_mask) = get_blocks_bitmask(&chunk, &block_models, chunk_padding);
-	crate::bench::push_time(BenchName::BitMask, bitmask_time.elapsed());
+	// crate::bench::push_time(BenchName::BitMask, bitmask_time.elapsed());
 
 	// currently this has to iterate over the masks twice per axis, since there are 2 faces.
 	// im not sure if this has worse (maybe better?) performance than if
@@ -171,7 +171,7 @@ fn get_blocks_bitmask(
 	let mut blocks_mask = <AxisMap<ChunkArray2D<u64>>>::default();
 	let mut non_culled_mask = <ChunkArray2D<u32>>::default();
 
-	let inner_time = Instant::now();
+	// let inner_time = Instant::now();
 	// fill in the current chunk
 	for (pos, block) in chunk.blocks.iter_xyz() {
 		let BlockInChunkPos { x, y, z } = pos;
@@ -184,9 +184,9 @@ fn get_blocks_bitmask(
 			non_culled_mask[x][y] |= 1 << z;
 		}
 	}
-	crate::bench::push_time(BenchName::BitMaskInner, inner_time.elapsed());
+	// crate::bench::push_time(BenchName::BitMaskInner, inner_time.elapsed());
 
-	let border_time = Instant::now();
+	// let border_time = Instant::now();
 	// fill in the edges of the neighbouring chunks
 	macro_rules! neighbours {
 		($(($a:ident, $b:ident) in ($axis:expr, $axis_name:ident));* $(;)?) => {
@@ -211,7 +211,7 @@ fn get_blocks_bitmask(
 		(x, z) in (Axis::Y, y);
 		(x, y) in (Axis::Z, z);
 	}
-	crate::bench::push_time(BenchName::BitMaskBorder, border_time.elapsed());
+	// crate::bench::push_time(BenchName::BitMaskBorder, border_time.elapsed());
 
 	// box the blocks_mask, so that its cheap to move around,
 	// because its a *lot* of data

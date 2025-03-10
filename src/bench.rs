@@ -21,9 +21,9 @@ impl Plugin for BenchPlugin {
 pub enum BenchName {
 	CreateChunkMesh,
 	SpawnThread,
-	BitMask,
-	BitMaskInner,
-	BitMaskBorder,
+	// BitMask,
+	// BitMaskInner,
+	// BitMaskBorder,
 }
 
 impl Display for BenchName {
@@ -31,9 +31,9 @@ impl Display for BenchName {
 		let name = match self {
 			Self::CreateChunkMesh => "create_chunk_mesh",
 			Self::SpawnThread => "spawn_thread",
-			Self::BitMask => "bit_mask",
-			Self::BitMaskInner => "bit_mask_inner",
-			Self::BitMaskBorder => "bit_mask_border",
+			// Self::BitMask => "bit_mask",
+			// Self::BitMaskInner => "bit_mask_inner",
+			// Self::BitMaskBorder => "bit_mask_border",
 		};
 		write!(f, "{}", name)
 	}
@@ -64,7 +64,7 @@ fn save_benches_to_file(input: Res<ButtonInput<KeyCode>>) {
 }
 
 fn save_stats(durations: &[Duration], name: &str, base_path: &Path) {
-	let path = base_path.join(format!("benches_{}_all.bin", name));
+	let path = base_path.join(format!("benches/{}_all.bin", name));
 	let content = bincode::serialize(durations).unwrap();
 	fs::write(path, content).unwrap();
 
@@ -72,7 +72,7 @@ fn save_stats(durations: &[Duration], name: &str, base_path: &Path) {
 	config.indentor = "\t".to_owned();
 	let stats = compute_stats_from_nanos(durations);
 
-	let path = base_path.join(format!("benches_{}_stats.ron", name));
+	let path = base_path.join(format!("benches/{}_stats.ron", name));
 	let content = ron::ser::to_string_pretty(&stats, config).unwrap();
 	fs::write(path, content).unwrap();
 }
