@@ -14,6 +14,7 @@ use crate::{
 use bevy::{
 	prelude::*,
 	render::{mesh::Indices, render_asset::RenderAssetUsages, render_resource::PrimitiveTopology},
+	tasks::futures_lite::future::yield_now,
 };
 use std::{collections::HashMap, time::Instant};
 
@@ -30,17 +31,32 @@ pub type ChunkArray2D<T> = [[T; CHUNK_LENGTH]; CHUNK_LENGTH];
 
 pub type ChunkPadding = FaceMap<Box<ChunkArray2D<Block>>>;
 
-pub fn create_chunk_mesh(
+pub async fn create_chunk_mesh(
 	chunk: Chunk,
 	chunk_padding: ChunkPadding,
 	block_models: HashMap<BlockId, BlockModel<usize>>,
 ) -> Mesh {
+	// These calls to `yield_now` give time for other systems to be ran on this thread.
+	// Without them, this entire function would have to finish before any other work
+	// can be done on this thread. Since these threads are shared with Bevy,
+	// this would result in a lot of lag visible to the player.
+	// Any data that exists during the await will be captured in this Future,
+	// so make sure to not store any large amounts of data on the stack during an await.
+	// Because this Future will be used to spawn a new thread, it must implement Send.
+	// This leads to some strange behaviour concerning where `yield_now`s can be placed.
+	// For details see: https://github.com/rust-lang/rust/issues/114177
+
+	yield_now().await;
+
 	// benchmarking of creating the chunk mesh
 	let start_time = Instant::now();
 
 	// let bitmask_time = Instant::now();
-	let (blocks_mask, non_culled_mask) = get_blocks_bitmask(&chunk, &block_models, chunk_padding);
+	let (blocks_mask, non_culled_mask) =
+		get_blocks_bitmask(&chunk, &block_models, chunk_padding).await;
 	// crate::bench::push_time(BenchName::BitMask, bitmask_time.elapsed());
+
+	yield_now().await;
 
 	// currently this has to iterate over the masks twice per axis, since there are 2 faces.
 	// im not sure if this has worse (maybe better?) performance than if
@@ -54,13 +70,18 @@ pub fn create_chunk_mesh(
 			|mask: u64| ((mask & !(mask << 1)) >> 1) as u32
 		};
 		// TODO test wether the usage of `map` is bad for performance
-		blocks_mask[face.axis()].map(|array| array.map(culling))
+		// TODO try to somehow insert a `yield_now` somewhere in here
+		Box::new(blocks_mask[face.axis()].map(|array| array.map(culling)))
 	});
+
+	yield_now().await;
 
 	// extract the actual BlockFaceData from these bitmasks and the chunk data
 	let mut all_faces = FaceMap::from_map(|_| Vec::new());
 	for (face, array2d) in culled_blocks_mask.iter_face() {
 		for (i, array) in array2d.iter().enumerate() {
+			yield_now().await;
+
 			for (j, mask) in array.iter().enumerate() {
 				let mut mask = *mask;
 				let mut k = 0;
@@ -85,9 +106,14 @@ pub fn create_chunk_mesh(
 			}
 		}
 	}
+
+	yield_now().await;
+
 	// basically the same thing as the for loop above,
 	// but adjusted for `non_culled_mask`
 	for (x, array) in non_culled_mask.iter().enumerate() {
+		yield_now().await;
+
 		for (y, mask) in array.iter().enumerate() {
 			let mut mask = *mask;
 			let mut z = 0;
@@ -109,16 +135,29 @@ pub fn create_chunk_mesh(
 		}
 	}
 
-	let meshes = all_faces.iter_face().flat_map(|(face, datas)| {
-		datas.iter().map({
-			move |&(&data, pos)| {
-				let info = BlockFaceInfo { face, data, pos };
-				create_face_mesh(info)
-			}
-		})
-	});
+	yield_now().await;
 
-	let combined_meshes = combine_meshes(meshes);
+	// have to manually collect here, due to issues with `yield_now`
+	let mut meshes = Vec::new();
+	for (face, datas) in all_faces.iter_face() {
+		for &(&data, pos) in datas {
+			let info = BlockFaceInfo { face, data, pos };
+			let mesh = create_face_mesh(info);
+			meshes.push(mesh);
+			yield_now().await;
+		}
+	}
+
+	// let meshes = all_faces.iter_face().flat_map(|(face, datas)| {
+	// 	datas.iter().map({
+	// 		move |&(&data, pos)| {
+	// 			let info = BlockFaceInfo { face, data, pos };
+	// 			create_face_mesh(info)
+	// 		}
+	// 	})
+	// });
+
+	let combined_meshes = combine_meshes(meshes.into_iter()).await;
 
 	crate::bench::push_time(BenchName::CreateChunkMesh, start_time.elapsed());
 
@@ -162,18 +201,20 @@ pub fn chunk_padding_from_neighbour_chunks(neighbour_chunks: FaceMap<&Chunk>) ->
 /// The 0th bit is an edge block of the negative facing neighbour chunk,
 /// while the 33rd bit is the edge block of the opposite chunk,
 /// and all bits in between (1st to 32nd inclusive) are the current chunk.
-fn get_blocks_bitmask(
+async fn get_blocks_bitmask(
 	chunk: &Chunk,
 	block_models: &HashMap<BlockId, BlockModel<usize>>,
 	chunk_padding: ChunkPadding,
 ) -> (Box<AxisMap<ChunkArray2D<u64>>>, Box<ChunkArray2D<u32>>) {
 	// start out with a completely empty mask
-	let mut blocks_mask = <AxisMap<ChunkArray2D<u64>>>::default();
-	let mut non_culled_mask = <ChunkArray2D<u32>>::default();
+	let mut blocks_mask = Box::<AxisMap<ChunkArray2D<u64>>>::default();
+	let mut non_culled_mask = Box::<ChunkArray2D<u32>>::default();
 
 	// let inner_time = Instant::now();
 	// fill in the current chunk
 	for (pos, block) in chunk.blocks.iter_xyz() {
+		yield_now().await;
+
 		let BlockInChunkPos { x, y, z } = pos;
 		let [x, y, z] = [x as usize, y as usize, z as usize];
 		if block_models[&block.id].should_cull {
@@ -192,6 +233,8 @@ fn get_blocks_bitmask(
 		($(($a:ident, $b:ident) in ($axis:expr, $axis_name:ident));* $(;)?) => {
 			$(
 			for $a in 0..CHUNK_LENGTH {
+				yield_now().await;
+
 				for $b in 0..CHUNK_LENGTH {
 					let block = chunk_padding[$axis.face_neg()][$a][$b];
 					if block_models[&block.id].should_cull {
@@ -213,10 +256,7 @@ fn get_blocks_bitmask(
 	}
 	// crate::bench::push_time(BenchName::BitMaskBorder, border_time.elapsed());
 
-	// box the blocks_mask, so that its cheap to move around,
-	// because its a *lot* of data
-	// TODO check if this has better performance if this is put into a box earlier
-	(Box::new(blocks_mask), Box::new(non_culled_mask))
+	(blocks_mask, non_culled_mask)
 }
 
 fn bitmask_pos_to_world(axis: Axis, i: usize, j: usize, k: u32) -> BlockInChunkPos {

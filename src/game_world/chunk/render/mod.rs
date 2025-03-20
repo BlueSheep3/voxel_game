@@ -236,9 +236,9 @@ fn create_chunk_redraw_tasks(
 
 	let pool = AsyncComputeTaskPool::get();
 	#[rustfmt::skip]
-	let task = pool.spawn(async move {
+	let task = pool.spawn(
 		create_chunk_mesh(cloned_chunk, chunk_padding, block_models)
-	});
+	);
 	mesh_tasks.tasks.insert(chunk_pos, task);
 
 	crate::bench::push_time(BenchName::SpawnThread, start_time.elapsed());

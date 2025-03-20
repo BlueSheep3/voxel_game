@@ -1,11 +1,11 @@
 use bevy::{
-	// math::Vec4Swizzles,
-	prelude::{/* Mat3, */ Mesh, Transform, Vec3},
+	prelude::{Mesh, Transform, Vec3},
 	render::{
 		mesh::{Indices, VertexAttributeValues},
 		render_asset::RenderAssetUsages,
 		render_resource::PrimitiveTopology,
 	},
+	tasks::futures_lite::future::yield_now,
 };
 
 use crate::block_model::ATTRIBUTE_BASE_VOXEL_INDICES;
@@ -17,7 +17,8 @@ use crate::block_model::ATTRIBUTE_BASE_VOXEL_INDICES;
 // this functions entire code is copied from:
 // https://gist.github.com/DGriffin91/e63e5f7a90b633250c2cf4bf8fd61ef8
 // and then modified to only include necessary things
-pub fn combine_meshes(meshes: impl Iterator<Item = Mesh>) -> Mesh {
+// and also be async
+pub async fn combine_meshes(meshes: impl Iterator<Item = Mesh>) -> Mesh {
 	let mut mesh = Mesh::new(
 		PrimitiveTopology::TriangleList,
 		RenderAssetUsages::default(),
@@ -32,6 +33,8 @@ pub fn combine_meshes(meshes: impl Iterator<Item = Mesh>) -> Mesh {
 	let mut indices_offset = 0;
 
 	for mesh in meshes {
+		yield_now().await;
+
 		let Indices::U32(mesh_indices) = &mesh.indices().unwrap() else {
 			continue;
 		};
@@ -108,6 +111,8 @@ pub fn combine_meshes(meshes: impl Iterator<Item = Mesh>) -> Mesh {
 		}
 		indices_offset += positions_len as u32;
 	}
+
+	yield_now().await;
 
 	mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
 	// mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
