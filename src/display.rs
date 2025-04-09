@@ -38,16 +38,16 @@ impl Debug for BlockPos {
 
 impl Display for BlockInChunkPos {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "[{}, {}, {}]", self.x, self.y, self.z)
+		write!(f, "[{}, {}, {}]", self.x(), self.y(), self.z())
 	}
 }
 
 impl Debug for BlockInChunkPos {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_tuple(stringify!(BlockInChunkPos))
-			.field(&self.x)
-			.field(&self.y)
-			.field(&self.z)
+			.field(&self.x())
+			.field(&self.y())
+			.field(&self.z())
 			.finish()
 	}
 }

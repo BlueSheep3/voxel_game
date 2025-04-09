@@ -69,7 +69,7 @@ pub fn create_chunk_mesh(
 					mask = (mask >> zeros) & !1;
 					k += zeros;
 
-					let pos = bitmask_pos_to_world(face.axis(), i, j, k);
+					let pos = bitmask_pos_to_world(face.axis(), i, j, k as usize).unwrap();
 					let block = chunk.blocks[pos];
 					let block_model = block_models.get(&block.id).unwrap_or_else(|| {
 						panic!("tried to get the model of block with id {:?}", block.id)
@@ -96,7 +96,7 @@ pub fn create_chunk_mesh(
 				mask = (mask >> zeros) & !1;
 				z += zeros;
 
-				let pos = BlockInChunkPos::new(x as u8, y as u8, z as u8);
+				let pos = BlockInChunkPos::try_new(x, y, z as usize).unwrap();
 				let block = chunk.blocks[pos];
 				let block_model = block_models.get(&block.id).unwrap_or_else(|| {
 					panic!("tried to get the model of block with id {:?}", block.id)
@@ -130,29 +130,30 @@ pub fn chunk_padding_from_neighbour_chunks(neighbour_chunks: FaceMap<&Chunk>) ->
 		FaceMap::from_map(|_| Box::new([[Air::BLOCK; CHUNK_LENGTH]; CHUNK_LENGTH]));
 
 	macro_rules! neighbours {
-		($(($a:ident, $b:ident) in ($axis:expr, $axis_name:ident)
+		($(($a:ident, $b:ident) in ($axis:expr, $with_axis:ident)
 		=> [$x:expr, $y:expr, $z:expr]);* $(;)?) => {
 			$(
 			for $a in 0..CHUNK_LENGTH {
 				for $b in 0..CHUNK_LENGTH {
-					let mut pos = BlockInChunkPos::new($x, $y, $z);
+					let pos = BlockInChunkPos::try_new($x, $y, $z).unwrap();
 
-					pos.$axis_name = CHUNK_LENGTH as u8 - 1;
-					let block = neighbour_chunks[$axis.face_neg()].blocks[pos];
-					chunk_padding[$axis.face_neg()][$a][$b] = block;
-
-					pos.$axis_name = 0;
+					// pos is already 0 at $axis
+					// let pos = pos.$with_axis(0).unwrap();
 					let block = neighbour_chunks[$axis.face_pos()].blocks[pos];
 					chunk_padding[$axis.face_pos()][$a][$b] = block;
+
+					let pos = pos.$with_axis(CHUNK_LENGTH - 1).unwrap();
+					let block = neighbour_chunks[$axis.face_neg()].blocks[pos];
+					chunk_padding[$axis.face_neg()][$a][$b] = block;
 				}
 			}
 			)*
 		};
 	}
 	neighbours! {
-		(y, z) in (Axis::X, x) => [0, y as u8, z as u8];
-		(x, z) in (Axis::Y, y) => [x as u8, 0, z as u8];
-		(x, y) in (Axis::Z, z) => [x as u8, y as u8, 0];
+		(y, z) in (Axis::X, with_x) => [0, y, z];
+		(x, z) in (Axis::Y, with_y) => [x, 0, z];
+		(x, y) in (Axis::Z, with_z) => [x, y, 0];
 	}
 	chunk_padding
 }
@@ -174,8 +175,7 @@ fn get_blocks_bitmask(
 	// let inner_time = Instant::now();
 	// fill in the current chunk
 	for (pos, block) in chunk.blocks.iter_xyz() {
-		let BlockInChunkPos { x, y, z } = pos;
-		let [x, y, z] = [x as usize, y as usize, z as usize];
+		let [x, y, z] = [pos.x(), pos.y(), pos.z()];
 		if block_models[&block.id].should_cull {
 			blocks_mask[Axis::X][y][z] |= 1 << (x + 1);
 			blocks_mask[Axis::Y][x][z] |= 1 << (y + 1);
@@ -219,12 +219,10 @@ fn get_blocks_bitmask(
 	(Box::new(blocks_mask), Box::new(non_culled_mask))
 }
 
-fn bitmask_pos_to_world(axis: Axis, i: usize, j: usize, k: u32) -> BlockInChunkPos {
+fn bitmask_pos_to_world(axis: Axis, i: usize, j: usize, k: usize) -> Option<BlockInChunkPos> {
 	// i and j are the two coordinates that are normally looped over.
 	// i represent an axis lower than j.
 	// k represent the axis along the bitmask itself (along `axis`).
-
-	let [i, j, k] = [i as u8, j as u8, k as u8];
 
 	let [x, y, z] = match axis {
 		Axis::X => [k, i, j],
@@ -232,7 +230,7 @@ fn bitmask_pos_to_world(axis: Axis, i: usize, j: usize, k: u32) -> BlockInChunkP
 		Axis::Z => [i, j, k],
 	};
 
-	BlockInChunkPos { x, y, z }
+	BlockInChunkPos::try_new(x, y, z)
 }
 
 fn create_face_mesh(info: BlockFaceInfo) -> Mesh {
