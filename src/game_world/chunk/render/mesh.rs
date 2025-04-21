@@ -331,9 +331,12 @@ fn create_face_mesh(face: Face, data: BlockFaceData<usize>) -> Mesh {
 	cube_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
 
 	// in the future block models may define different uvs, this is temporary
-	let Rect { min, max } = Rect::from_corners(Vec2::ZERO, Vec2::ONE);
-	let Vec2 { x: x0, y: y0 } = min;
-	let Vec2 { x: x1, y: y1 } = max;
+	let Vec2 { x: x0, y: y0 } = Vec2::ZERO;
+	let Vec2 { x: x1, y: y1 } = match face.axis() {
+		Axis::X => Vec2::new(data.max.z - data.min.z, data.max.y - data.min.y),
+		Axis::Y => Vec2::new(data.max.x - data.min.x, data.max.z - data.min.z),
+		Axis::Z => Vec2::new(data.max.x - data.min.x, data.max.y - data.min.y),
+	};
 	let uvs = vec![[x0, y0], [x0, y1], [x1, y1], [x1, y0]];
 	cube_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
 
