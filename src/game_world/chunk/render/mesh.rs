@@ -33,9 +33,6 @@ pub fn create_chunk_mesh(
 	let (blocks_mask, non_culled_mask) = get_blocks_bitmask(&chunk, &block_models, chunk_padding);
 	// crate::bench::push_time(BenchName::BitMask, bitmask_time.elapsed());
 
-	// currently this has to iterate over the masks twice per axis, since there are 2 faces.
-	// im not sure if this has worse (maybe better?) performance than if
-	// you iterated over every axis exactly once.
 	let culled_blocks_mask = FaceMap::from_map(|face| {
 		// `>> 1` because the negative chunk neighbour's block takes up 1 bit at the edge.
 		// the cast to `u32` cuts of the positive chunk neighbour's bit.
@@ -44,7 +41,6 @@ pub fn create_chunk_mesh(
 		} else {
 			|mask: u64| ((mask & !(mask << 1)) >> 1) as u32
 		};
-		// TODO test wether the usage of `map` is bad for performance
 		blocks_mask[face.axis()].map(|array| array.map(culling))
 	});
 
@@ -101,7 +97,7 @@ pub fn chunk_padding_from_neighbour_chunks(neighbour_chunks: FaceMap<&Chunk>) ->
 fn build_greedy_bitmask(
 	culled_blocks_mask: &FaceMap<ChunkArray2D<u32>>,
 ) -> Box<FaceMap<ChunkArray2D<u32>>> {
-	let mut greedy_mask = <FaceMap<ChunkArray2D<u32>>>::default();
+	let mut greedy_mask = Box::<FaceMap<ChunkArray2D<u32>>>::default();
 	for (face, array2d) in culled_blocks_mask.iter_face() {
 		for (i, array) in array2d.iter().enumerate() {
 			for (j, mask) in array.iter().enumerate() {
@@ -126,7 +122,7 @@ fn build_greedy_bitmask(
 			}
 		}
 	}
-	Box::new(greedy_mask)
+	greedy_mask
 }
 
 fn insert_greedy_face_data(
@@ -259,8 +255,8 @@ fn get_blocks_bitmask(
 	chunk_padding: ChunkPadding,
 ) -> (Box<AxisMap<ChunkArray2D<u64>>>, Box<ChunkArray2D<u32>>) {
 	// start out with a completely empty mask
-	let mut blocks_mask = <AxisMap<ChunkArray2D<u64>>>::default();
-	let mut non_culled_mask = <ChunkArray2D<u32>>::default();
+	let mut blocks_mask = Box::<AxisMap<ChunkArray2D<u64>>>::default();
+	let mut non_culled_mask = Box::<ChunkArray2D<u32>>::default();
 
 	// let inner_time = Instant::now();
 	// fill in the current chunk
@@ -303,10 +299,7 @@ fn get_blocks_bitmask(
 	}
 	// crate::bench::push_time(BenchName::BitMaskBorder, border_time.elapsed());
 
-	// box the blocks_mask, so that its cheap to move around,
-	// because its a *lot* of data
-	// TODO check if this has better performance if this is put into a box earlier
-	(Box::new(blocks_mask), Box::new(non_culled_mask))
+	(blocks_mask, non_culled_mask)
 }
 
 fn bitmask_pos_to_world(axis: Axis, [i, j, k]: [usize; 3]) -> Option<BlockInChunkPos> {
