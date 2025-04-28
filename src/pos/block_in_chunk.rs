@@ -1,4 +1,4 @@
-use crate::game_world::chunk::CHUNK_LENGTH;
+use crate::{axis::Axis, game_world::chunk::CHUNK_LENGTH};
 use bevy::math::{IVec3, Vec3};
 
 // CHUNK_LENGTH is guaranteed to be a power of 2
@@ -20,13 +20,13 @@ mod internal {
 		/// # Safety
 		///
 		/// You must guarantee that `index < CHUNK_LENGTH.pow(3)`
-		pub unsafe fn from_index_unchecked(index: usize) -> Self {
+		pub const unsafe fn from_index_unchecked(index: usize) -> Self {
 			Self { index }
 		}
 
 		/// The index of the block at this position in a `BlockArray`.\
 		/// Guaranteed to be `< CHUNK_LENGTH.pow(3)`.
-		pub fn index(self) -> usize {
+		pub const fn index(self) -> usize {
 			self.index
 		}
 	}
@@ -52,16 +52,24 @@ impl BlockInChunkPos {
 		})
 	}
 
-	pub fn x(self) -> usize {
+	pub const fn x(self) -> usize {
 		(self.index() / CHUNK_LENGTH.pow(2)) % CHUNK_LENGTH
 	}
 
-	pub fn y(self) -> usize {
+	pub const fn y(self) -> usize {
 		(self.index() / CHUNK_LENGTH) % CHUNK_LENGTH
 	}
 
-	pub fn z(self) -> usize {
+	pub const fn z(self) -> usize {
 		self.index() % CHUNK_LENGTH
+	}
+
+	pub const fn get(self, axis: Axis) -> usize {
+		match axis {
+			Axis::X => self.x(),
+			Axis::Y => self.y(),
+			Axis::Z => self.z(),
+		}
 	}
 
 	pub fn with_x(self, x: usize) -> Option<Self> {
@@ -134,5 +142,13 @@ impl TryFrom<IVec3> for BlockInChunkPos {
 		} else {
 			Err(value)
 		}
+	}
+}
+
+impl TryFrom<[usize; 3]> for BlockInChunkPos {
+	type Error = [usize; 3];
+
+	fn try_from(value @ [x, y, z]: [usize; 3]) -> Result<Self, Self::Error> {
+		Self::try_new(x, y, z).ok_or(value)
 	}
 }

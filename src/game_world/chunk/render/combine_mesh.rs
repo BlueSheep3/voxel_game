@@ -1,14 +1,12 @@
+use crate::block_model::chunk_material::{ATTRIBUTE_RECT_WIDTH, ATTRIBUTE_START_TEXTURE_INDEX};
 use bevy::{
-	// math::Vec4Swizzles,
-	prelude::{/* Mat3, */ Mesh, Transform, Vec3},
+	prelude::{Mesh, Transform, Vec3},
 	render::{
 		mesh::{Indices, VertexAttributeValues},
 		render_asset::RenderAssetUsages,
 		render_resource::PrimitiveTopology,
 	},
 };
-
-use crate::block_model::ATTRIBUTE_BASE_VOXEL_INDICES;
 
 // NOTE you cannot replace this function with Mesh::merge,
 // because it seems to have some problems with the "Vertex_Position".
@@ -26,7 +24,8 @@ pub fn combine_meshes(meshes: impl Iterator<Item = Mesh>) -> Mesh {
 	let mut positions: Vec<[f32; 3]> = Vec::new();
 	// let mut normals: Vec<[f32; 3]> = Vec::new();
 	let mut uvs: Vec<[f32; 2]> = Vec::new();
-	let mut voxel_indices: Vec<u32> = Vec::new();
+	let mut start_texture_indices: Vec<u32> = Vec::new();
+	let mut rect_widths: Vec<u32> = Vec::new();
 	let mut indices: Vec<u32> = Vec::new();
 
 	let mut indices_offset = 0;
@@ -93,14 +92,22 @@ pub fn combine_meshes(meshes: impl Iterator<Item = Mesh>) -> Mesh {
 		// 	panic!("no normals")
 		// }
 
-		if let Some(VertexAttributeValues::Uint32(vis)) =
-			&mesh.attribute(ATTRIBUTE_BASE_VOXEL_INDICES)
+		if let Some(VertexAttributeValues::Uint32(stis)) =
+			&mesh.attribute(ATTRIBUTE_START_TEXTURE_INDEX)
 		{
-			for vi in vis {
-				voxel_indices.push(*vi);
+			for sti in stis {
+				start_texture_indices.push(*sti);
 			}
 		} else {
-			panic!("no voxel indices")
+			panic!("no start texture indices")
+		}
+
+		if let Some(VertexAttributeValues::Uint32(rws)) = &mesh.attribute(ATTRIBUTE_RECT_WIDTH) {
+			for rw in rws {
+				rect_widths.push(*rw);
+			}
+		} else {
+			panic!("no rect widths")
 		}
 
 		for i in mesh_indices {
@@ -112,7 +119,8 @@ pub fn combine_meshes(meshes: impl Iterator<Item = Mesh>) -> Mesh {
 	mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
 	// mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
 	mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
-	mesh.insert_attribute(ATTRIBUTE_BASE_VOXEL_INDICES, voxel_indices);
+	mesh.insert_attribute(ATTRIBUTE_START_TEXTURE_INDEX, start_texture_indices);
+	mesh.insert_attribute(ATTRIBUTE_RECT_WIDTH, rect_widths);
 	mesh.insert_indices(Indices::U32(indices));
 
 	mesh

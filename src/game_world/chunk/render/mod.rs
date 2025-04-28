@@ -1,19 +1,24 @@
 mod combine_mesh;
 mod mesh;
 
-use self::mesh::create_chunk_mesh;
+use self::mesh::{create_chunk_mesh, FaceTextureIndices};
 use super::ChunkUpdateEvent;
 use crate::{
 	bench::BenchName,
-	block_model::{ChunkMaterial, GlobalTexture, LoadingState},
+	block_model::{
+		chunk_material::{ChunkMaterial, ExtendedChunkMaterial},
+		GlobalTexture,
+	},
 	face::FaceMap,
 	game_world::{loading::UpdateChunkIsLoadedEvent, GameWorld},
 	pos::ChunkPos,
 	GlobalState,
 };
 use bevy::{
+	asset::RenderAssetUsages,
 	pbr::ExtendedMaterial,
 	prelude::*,
+	render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 	tasks::{block_on, AsyncComputeTaskPool, Task},
 };
 use std::{collections::HashMap, time::Instant};
@@ -25,7 +30,6 @@ impl Plugin for RenderPlugin {
 		app.insert_resource(QueuedChunkRedraws::default())
 			.insert_resource(ChunkMeshEntities::default())
 			.insert_resource(MeshTasks::default())
-			.add_systems(OnEnter(LoadingState::Done), setup_global_material)
 			.add_systems(OnEnter(GlobalState::InWorld), init)
 			.add_systems(OnExit(GlobalState::InWorld), cleanup)
 			.add_systems(
@@ -38,7 +42,6 @@ impl Plugin for RenderPlugin {
 					queue_loading_chunks,
 					queue_updating_chunks,
 				)
-					.run_if(has_loaded_global_material)
 					.run_if(in_state(GlobalState::InWorld)),
 			);
 	}
@@ -66,39 +69,6 @@ struct ChunkRedrawInfo {
 #[derive(Resource, Default)]
 struct ChunkMeshEntities {
 	entities: HashMap<ChunkPos, Entity>,
-}
-
-#[derive(Resource)]
-struct GlobalChunkMaterial {
-	material: Handle<ExtendedMaterial<StandardMaterial, ChunkMaterial>>,
-}
-
-fn has_loaded_global_material(world: &World) -> bool {
-	world.contains_resource::<GlobalChunkMaterial>()
-}
-
-fn setup_global_material(
-	mut commands: Commands,
-	global_texture: Res<GlobalTexture>,
-	mut materials: ResMut<Assets<ExtendedMaterial<StandardMaterial, ChunkMaterial>>>,
-) {
-	let global_material_handle = materials.add(ExtendedMaterial {
-		base: StandardMaterial {
-			unlit: true,
-			..default()
-		},
-		extension: ChunkMaterial {
-			texture: global_texture.image.clone(),
-		},
-	});
-
-	let global_material = GlobalChunkMaterial {
-		material: global_material_handle,
-	};
-
-	commands.insert_resource(global_material);
-
-	info!("global material inserted");
 }
 
 fn init(mut commands: Commands) {
@@ -191,7 +161,7 @@ fn stop_chunk_redraw_tasks_on_unload(
 
 #[derive(Resource, Debug, Default)]
 struct MeshTasks {
-	tasks: HashMap<ChunkPos, Task<Mesh>>,
+	tasks: HashMap<ChunkPos, Task<(Mesh, FaceTextureIndices)>>,
 }
 
 fn create_chunk_redraw_tasks(
@@ -244,13 +214,16 @@ fn create_chunk_redraw_tasks(
 	crate::bench::push_time(BenchName::SpawnThread, start_time.elapsed());
 }
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_chunk_meshes_from_tasks(
 	mut commands: Commands,
 	mut meshes: ResMut<Assets<Mesh>>,
-	global_material: Res<GlobalChunkMaterial>,
+	global_texture: Res<GlobalTexture>,
 	mut mesh_entites: ResMut<ChunkMeshEntities>,
 	mut mesh_tasks: ResMut<MeshTasks>,
 	chunk_mesh_parent: Query<Entity, With<ChunkMeshParent>>,
+	mut materials: ResMut<Assets<ExtendedChunkMaterial>>,
+	mut images: ResMut<Assets<Image>>,
 ) {
 	let chunk_mesh_parent = chunk_mesh_parent.single();
 	let keys = mesh_tasks.tasks.keys().cloned().collect::<Vec<_>>();
@@ -265,7 +238,7 @@ fn spawn_chunk_meshes_from_tasks(
 			unreachable!()
 		};
 
-		let mesh = block_on(task);
+		let (mesh, face_texture_indices) = block_on(task);
 		let cube_mesh_handle = meshes.add(mesh);
 
 		// PERF it would be more efficient to update the entity instead of creating a new one
@@ -277,10 +250,18 @@ fn spawn_chunk_meshes_from_tasks(
 			commands.entity(entity).despawn();
 		}
 
+		// assets are ref counted, so when the chunk is unloaded the asset will be dropped
+		let material = create_chunk_material(
+			face_texture_indices,
+			&global_texture,
+			&mut materials,
+			&mut images,
+		);
+
 		let entity = commands
 			.spawn((
 				Mesh3d(cube_mesh_handle),
-				MeshMaterial3d(global_material.material.clone()),
+				MeshMaterial3d(material),
 				Transform::from_translation(chunk_pos.to_world_pos()),
 				ChunkMesh,
 				Name::new(format!("Chunk Mesh at {}", chunk_pos)),
@@ -290,4 +271,41 @@ fn spawn_chunk_meshes_from_tasks(
 
 		mesh_entites.entities.insert(chunk_pos, entity);
 	}
+}
+
+fn create_chunk_material(
+	mut face_texture_indices: FaceTextureIndices,
+	global_texture: &Res<GlobalTexture>,
+	materials: &mut ResMut<Assets<ExtendedChunkMaterial>>,
+	images: &mut ResMut<Assets<Image>>,
+) -> Handle<ExtendedChunkMaterial> {
+	// the width of any image must be non zero.
+	// this can only happen if the chunk is empty,
+	// so we can just insert some garbage data.
+	if face_texture_indices.len() == 0 {
+		face_texture_indices.push_index(0);
+	}
+	let indices = Image::new(
+		Extent3d {
+			width: face_texture_indices.len() as u32,
+			height: 1,
+			depth_or_array_layers: 1,
+		},
+		TextureDimension::D1,
+		face_texture_indices.into_bytes(),
+		TextureFormat::R32Uint,
+		RenderAssetUsages::RENDER_WORLD,
+	);
+	let indices = images.add(indices);
+
+	materials.add(ExtendedMaterial {
+		base: StandardMaterial {
+			unlit: true,
+			..default()
+		},
+		extension: ChunkMaterial {
+			block_textures: global_texture.image.clone(),
+			face_texture_indices: indices,
+		},
+	})
 }

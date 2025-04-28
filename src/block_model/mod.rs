@@ -1,5 +1,5 @@
 // mod block_model_asset;
-mod chunk_material;
+pub mod chunk_material;
 mod wireframe_rendering;
 
 use self::{chunk_material::ChunkMaterialPlugin, wireframe_rendering::WireframeRenderingPlugin};
@@ -13,8 +13,6 @@ use image::{imageops, DynamicImage};
 use serde::Deserialize;
 use std::{collections::HashMap, ffi::OsString, fs};
 use thiserror::Error;
-
-pub use self::chunk_material::{ChunkMaterial, ATTRIBUTE_BASE_VOXEL_INDICES};
 
 pub struct BlockModelPlugin;
 

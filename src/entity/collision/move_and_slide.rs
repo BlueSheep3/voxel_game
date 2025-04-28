@@ -23,8 +23,6 @@ impl Plugin for MoveAndSlidePlugin {
 	}
 }
 
-// FIXME can still sometimes walk through walls
-
 /// moves the hitbox using its velocity and
 /// slides along any blocks in the way
 fn move_and_slide(
@@ -213,8 +211,13 @@ fn get_block_collisions(positions: Vec<BlockPos>, game_world: &GameWorld) -> Vec
 		.flat_map(|pos| {
 			game_world
 				.get_block_at(pos)
+				.map_or_else(
+					// if the chunk isnt loaded, make it behave like a wall,
+					// so that you cant fall through the world
+					|| vec![Cuboid::from_corners(Vec3::ZERO, Vec3::ONE)],
+					|block| block.get_collision(),
+				)
 				.into_iter()
-				.flat_map(|block| block.get_collision())
 				.map(move |col| col + pos.to_world_pos())
 		})
 		.collect()
