@@ -6,7 +6,10 @@ use crate::{
 		prelude::{Air, BlockTrait, BlockWithoutData},
 		Block, BlockId,
 	},
-	block_model::{BlockFaceData, BlockModel, ATTRIBUTE_BASE_VOXEL_INDICES},
+	block_model::{
+		chunk_material::{ATTRIBUTE_RECT_WIDTH, ATTRIBUTE_START_TEXTURE_INDEX},
+		BlockModel,
+	},
 	face::{Face, FaceMap},
 	game_world::chunk::{Chunk, CHUNK_LENGTH},
 	pos::BlockInChunkPos,
@@ -16,26 +19,45 @@ use bevy::{
 	render::{mesh::Indices, render_asset::RenderAssetUsages, render_resource::PrimitiveTopology},
 	tasks::futures_lite::future::yield_now,
 };
+use itertools::Either;
 use std::{collections::HashMap, time::Instant};
-
-struct BlockFaceInfo {
-	/// which way this face is facing
-	face: Face,
-	/// the shape and texture of this face
-	data: BlockFaceData<usize>,
-	/// how much this block is offset from `(0,0,0)` in this chunk
-	pos: BlockInChunkPos,
-}
 
 pub type ChunkArray2D<T> = [[T; CHUNK_LENGTH]; CHUNK_LENGTH];
 
 pub type ChunkPadding = FaceMap<Box<ChunkArray2D<Block>>>;
 
+#[derive(Clone, Copy)]
+struct BlockFaceData {
+	min: Vec3,
+	max: Vec3,
+	start_texture_index: u32,
+	rect_width: u32,
+}
+
+#[derive(Debug, Default)]
+pub struct FaceTextureIndices(Vec<u8>);
+
+impl FaceTextureIndices {
+	pub fn push_index(&mut self, index: u32) {
+		// wgsl is guaranteed to use little-endian:
+		// https://gpuweb.github.io/gpuweb/wgsl/#internal-value-layout
+		self.0.extend_from_slice(&index.to_le_bytes());
+	}
+
+	pub fn len(&self) -> usize {
+		self.0.len() / 4
+	}
+
+	pub fn into_bytes(self) -> Vec<u8> {
+		self.0
+	}
+}
+
 pub async fn create_chunk_mesh(
 	chunk: Chunk,
 	chunk_padding: ChunkPadding,
 	block_models: HashMap<BlockId, BlockModel<usize>>,
-) -> Mesh {
+) -> (Mesh, FaceTextureIndices) {
 	// These calls to `yield_now` give time for other systems to be ran on this thread.
 	// Without them, this entire function would have to finish before any other work
 	// can be done on this thread. Since these threads are shared with Bevy,
@@ -58,9 +80,6 @@ pub async fn create_chunk_mesh(
 
 	yield_now().await;
 
-	// currently this has to iterate over the masks twice per axis, since there are 2 faces.
-	// im not sure if this has worse (maybe better?) performance than if
-	// you iterated over every axis exactly once.
 	let culled_blocks_mask = FaceMap::from_map(|face| {
 		// `>> 1` because the negative chunk neighbour's block takes up 1 bit at the edge.
 		// the cast to `u32` cuts of the positive chunk neighbour's bit.
@@ -69,7 +88,6 @@ pub async fn create_chunk_mesh(
 		} else {
 			|mask: u64| ((mask & !(mask << 1)) >> 1) as u32
 		};
-		// TODO test wether the usage of `map` is bad for performance
 		// TODO try to somehow insert a `yield_now` somewhere in here
 		Box::new(blocks_mask[face.axis()].map(|array| array.map(culling)))
 	});
@@ -78,6 +96,78 @@ pub async fn create_chunk_mesh(
 
 	// extract the actual BlockFaceData from these bitmasks and the chunk data
 	let mut all_faces = FaceMap::from_map(|_| Vec::new());
+	let mut face_texture_indices = FaceTextureIndices::default();
+	let greedy_mask = build_greedy_bitmask(&culled_blocks_mask).await;
+	insert_greedy_face_data(
+		&mut all_faces,
+		greedy_mask,
+		&mut face_texture_indices,
+		&chunk,
+		&block_models,
+	)
+	.await;
+	insert_non_culled_face_data(
+		&mut all_faces,
+		non_culled_mask,
+		&mut face_texture_indices,
+		&chunk,
+		&block_models,
+	)
+	.await;
+
+	let mut meshes = Vec::new();
+	for (face, datas) in all_faces.iter_face() {
+		for &data in datas {
+			yield_now().await;
+			let mesh = create_face_mesh(face, data);
+			meshes.push(mesh);
+		}
+	}
+
+	let combined_meshes = combine_meshes(meshes.into_iter()).await;
+
+	crate::bench::push_time(BenchName::CreateChunkMesh, start_time.elapsed());
+
+	(combined_meshes, face_texture_indices)
+}
+
+pub fn chunk_padding_from_neighbour_chunks(neighbour_chunks: FaceMap<&Chunk>) -> ChunkPadding {
+	let mut chunk_padding =
+		FaceMap::from_map(|_| Box::new([[Air::BLOCK; CHUNK_LENGTH]; CHUNK_LENGTH]));
+
+	macro_rules! neighbours {
+		($(($a:ident, $b:ident) in ($axis:expr, $with_axis:ident)
+		=> [$x:expr, $y:expr, $z:expr]);* $(;)?) => {
+			$(
+			for $a in 0..CHUNK_LENGTH {
+				for $b in 0..CHUNK_LENGTH {
+					let pos = BlockInChunkPos::try_new($x, $y, $z).unwrap();
+
+					// pos is already 0 at $axis
+					// let pos = pos.$with_axis(0).unwrap();
+					let block = neighbour_chunks[$axis.face_pos()].blocks[pos];
+					chunk_padding[$axis.face_pos()][$a][$b] = block;
+
+					let pos = pos.$with_axis(CHUNK_LENGTH - 1).unwrap();
+					let block = neighbour_chunks[$axis.face_neg()].blocks[pos];
+					chunk_padding[$axis.face_neg()][$a][$b] = block;
+				}
+			}
+			)*
+		};
+	}
+	neighbours! {
+		(y, z) in (Axis::X, with_x) => [0, y, z];
+		(x, z) in (Axis::Y, with_y) => [x, 0, z];
+		(x, y) in (Axis::Z, with_z) => [x, y, 0];
+	}
+	chunk_padding
+}
+
+async fn build_greedy_bitmask(
+	culled_blocks_mask: &FaceMap<Box<ChunkArray2D<u32>>>,
+) -> Box<FaceMap<ChunkArray2D<u32>>> {
+	let mut greedy_mask = Box::<FaceMap<ChunkArray2D<u32>>>::default();
 	for (face, array2d) in culled_blocks_mask.iter_face() {
 		for (i, array) in array2d.iter().enumerate() {
 			yield_now().await;
@@ -90,31 +180,176 @@ pub async fn create_chunk_mesh(
 					mask = (mask >> zeros) & !1;
 					k += zeros;
 
-					let pos = bitmask_pos_to_world(face.axis(), i, j, k);
-					let block = chunk.blocks[pos];
-					let block_model = block_models.get(&block.id).unwrap_or_else(|| {
-						panic!("tried to get the model of block with id {:?}", block.id)
-					});
-					// mapping the block positions here might seem like unnecessary
-					// duplication of this data, but most blocks only have a single face
-					// per direction, meaning that most of the time this wont be duplicated.
-					// the only way to not duplicate the `pos` would be to store the actual
-					// Vec inside `all_faces`, which would introduce indirection and all
-					// the extra data needed to store a Vec.
-					all_faces[face].extend(block_model.faces[face].iter().map(|data| (data, pos)));
+					// PERF swapping i and j for the z axis makes it so each bitmask
+					// is oriented horizontally instead of vertically.
+					// this is better for performance, since horizontal strips
+					// are more common than vertical ones.
+					// the x axis is already oriented in the horizontal direction,
+					// and there is no bias for the y axis.
+					match face.axis() {
+						Axis::X | Axis::Y => greedy_mask[face][k as usize][i] |= 1 << j,
+						Axis::Z => greedy_mask[face][k as usize][j] |= 1 << i,
+					}
 				}
 			}
 		}
 	}
+	greedy_mask
+}
 
-	yield_now().await;
+async fn insert_greedy_face_data(
+	all_faces: &mut FaceMap<Vec<BlockFaceData>>,
+	mut greedy_mask: Box<FaceMap<ChunkArray2D<u32>>>,
+	face_texture_indices: &mut FaceTextureIndices,
+	chunk: &Chunk,
+	block_models: &HashMap<BlockId, BlockModel<usize>>,
+) {
+	for (face, array2d) in greedy_mask.iter_mut_face() {
+		for (i, array) in array2d.iter_mut().enumerate() {
+			for j in 0..array.len() {
+				yield_now().await;
 
-	// basically the same thing as the for loop above,
-	// but adjusted for `non_culled_mask`
+				let mut mask_copy = array[j];
+				let mut k = 0;
+				while mask_copy != 0 {
+					let zeros = mask_copy.trailing_zeros();
+					mask_copy >>= zeros;
+					k += zeros;
+
+					let ones = mask_copy.trailing_ones();
+					mask_copy = mask_copy.checked_shr(ones).unwrap_or(0);
+					let from = k;
+					k += ones;
+
+					// this entire strip of blocks, as a bitmask.
+					// `<<` doesnt overflow in the way you would expect,
+					// so we use `checked_shl` here instead.
+					// `from != 32`, because otherwise `mask_copy == 0`, so the
+					// left shift there will never overflow (in any problematic way).
+					let ones_exp2 = 1_u32.checked_shl(ones).unwrap_or(0);
+					let strip_mask = (ones_exp2.wrapping_sub(1)) << from;
+
+					// expand the strip into a rectangle,
+					// and unset any bits along the way
+					array[j] &= !strip_mask;
+					let mut strip_expand = 0;
+					for next_mask in &mut array[(j + 1)..] {
+						if *next_mask & strip_mask == strip_mask {
+							strip_expand += 1;
+							*next_mask &= !strip_mask;
+						} else {
+							break;
+						}
+					}
+
+					#[rustfmt::skip]
+					let from_pos = bitmask_pos_to_world(
+						face.axis(),
+						[i, j, from as usize]
+					).unwrap();
+
+					let to_pos = bitmask_pos_to_world(
+						face.axis(),
+						[i, j + strip_expand, (from + ones - 1) as usize],
+					)
+					.unwrap();
+
+					let from_vec3 = Vec3::from(from_pos);
+					// expand `to` out orthogonally to the faces normal,
+					// because: if `from_pos == to_pos` you still want
+					// a face that is 1x1 instead of 0x0
+					let to_vec3 = Vec3::from(to_pos) + (1 - face.normal().abs()).as_vec3();
+					let to_vec3 = if face.is_pos() {
+						to_vec3 + face.normal().as_vec3()
+					} else {
+						to_vec3
+					};
+
+					let (start_texture_index, rect_width) = push_face_texture_indices(
+						face_texture_indices,
+						from_pos,
+						to_pos,
+						face,
+						chunk,
+						block_models,
+					);
+					let data = BlockFaceData {
+						min: from_vec3,
+						max: to_vec3,
+						start_texture_index,
+						rect_width,
+					};
+					all_faces[face].push(data);
+				}
+			}
+		}
+	}
+}
+
+fn push_face_texture_indices(
+	face_texture_indices: &mut FaceTextureIndices,
+	from_pos: BlockInChunkPos,
+	to_pos: BlockInChunkPos,
+	face: Face,
+	chunk: &Chunk,
+	block_models: &HashMap<BlockId, BlockModel<usize>>,
+) -> (u32, u32) {
+	let axis = face.axis();
+	let start_texture_index = face_texture_indices.len();
+	// using inclusive ranges here would be nicer,
+	// but they dont implement ExactSizeIterator,
+	// so they dont have a len() function.
+	#[rustfmt::skip]
+	let [iter_i, iter_j] = match axis {
+		Axis::X => [from_pos.z()..(to_pos.z() + 1), from_pos.y()..(to_pos.y() + 1)],
+		Axis::Y => [from_pos.x()..(to_pos.x() + 1), from_pos.z()..(to_pos.z() + 1)],
+		Axis::Z => [from_pos.x()..(to_pos.x() + 1), from_pos.y()..(to_pos.y() + 1)],
+	};
+	// for some directions an iter has to be reversed.
+	// i dont really know why, i just kinda tried it out.
+	let [iter_i, iter_j] = match face {
+		Face::Right | Face::Forward => [Either::Right(iter_i.rev()), Either::Right(iter_j.rev())],
+		Face::Up => [Either::Left(iter_i), Either::Left(iter_j)],
+		_ => [Either::Left(iter_i), Either::Right(iter_j.rev())],
+	};
+	let k = from_pos.get(axis);
+	for j in iter_j {
+		for i in iter_i.clone() {
+			let pos = BlockInChunkPos::try_from(match axis {
+				Axis::X => [k, j, i],
+				Axis::Y => [i, k, j],
+				Axis::Z => [i, j, k],
+			})
+			.unwrap();
+			let block = chunk.blocks[pos];
+			let block_model = block_models.get(&block.id).unwrap_or_else(|| {
+				panic!("tried to get the model of block with id {:?}", block.id)
+			});
+			let [face_data] = block_model.faces[face].as_slice() else {
+				panic!(
+					"every culled block must consist of only single faces, \
+					but block with id {:?} had {} faces",
+					block.id,
+					block_model.faces[face].len()
+				);
+			};
+			face_texture_indices.push_index(face_data.side as u32);
+		}
+	}
+	(start_texture_index as u32, iter_i.len() as u32)
+}
+
+async fn insert_non_culled_face_data(
+	all_faces: &mut FaceMap<Vec<BlockFaceData>>,
+	non_culled_mask: Box<ChunkArray2D<u32>>,
+	face_texture_indices: &mut FaceTextureIndices,
+	chunk: &Chunk,
+	block_models: &HashMap<BlockId, BlockModel<usize>>,
+) {
 	for (x, array) in non_culled_mask.iter().enumerate() {
-		yield_now().await;
-
 		for (y, mask) in array.iter().enumerate() {
+			yield_now().await;
+
 			let mut mask = *mask;
 			let mut z = 0;
 			while mask != 0 {
@@ -122,78 +357,28 @@ pub async fn create_chunk_mesh(
 				mask = (mask >> zeros) & !1;
 				z += zeros;
 
-				let pos = BlockInChunkPos::new(x as u8, y as u8, z as u8);
+				let pos = BlockInChunkPos::try_new(x, y, z as usize).unwrap();
 				let block = chunk.blocks[pos];
 				let block_model = block_models.get(&block.id).unwrap_or_else(|| {
 					panic!("tried to get the model of block with id {:?}", block.id)
 				});
+				let pos = Vec3::from(pos);
 				for face in Face::all() {
-					// see previous comment about this
-					all_faces[face].extend(block_model.faces[face].iter().map(|data| (data, pos)));
+					for &data in &block_model.faces[face] {
+						let face_index = face_texture_indices.len() as u32;
+						face_texture_indices.push_index(data.side as u32);
+						let face_data = BlockFaceData {
+							min: data.min + pos,
+							max: data.max + pos,
+							start_texture_index: face_index,
+							rect_width: 1,
+						};
+						all_faces[face].push(face_data);
+					}
 				}
 			}
 		}
 	}
-
-	yield_now().await;
-
-	// have to manually collect here, due to issues with `yield_now`
-	let mut meshes = Vec::new();
-	for (face, datas) in all_faces.iter_face() {
-		for &(&data, pos) in datas {
-			let info = BlockFaceInfo { face, data, pos };
-			let mesh = create_face_mesh(info);
-			meshes.push(mesh);
-			yield_now().await;
-		}
-	}
-
-	// let meshes = all_faces.iter_face().flat_map(|(face, datas)| {
-	// 	datas.iter().map({
-	// 		move |&(&data, pos)| {
-	// 			let info = BlockFaceInfo { face, data, pos };
-	// 			create_face_mesh(info)
-	// 		}
-	// 	})
-	// });
-
-	let combined_meshes = combine_meshes(meshes.into_iter()).await;
-
-	crate::bench::push_time(BenchName::CreateChunkMesh, start_time.elapsed());
-
-	combined_meshes
-}
-
-pub fn chunk_padding_from_neighbour_chunks(neighbour_chunks: FaceMap<&Chunk>) -> ChunkPadding {
-	let mut chunk_padding =
-		FaceMap::from_map(|_| Box::new([[Air::BLOCK; CHUNK_LENGTH]; CHUNK_LENGTH]));
-
-	macro_rules! neighbours {
-		($(($a:ident, $b:ident) in ($axis:expr, $axis_name:ident)
-		=> [$x:expr, $y:expr, $z:expr]);* $(;)?) => {
-			$(
-			for $a in 0..CHUNK_LENGTH {
-				for $b in 0..CHUNK_LENGTH {
-					let mut pos = BlockInChunkPos::new($x, $y, $z);
-
-					pos.$axis_name = CHUNK_LENGTH as u8 - 1;
-					let block = neighbour_chunks[$axis.face_neg()].blocks[pos];
-					chunk_padding[$axis.face_neg()][$a][$b] = block;
-
-					pos.$axis_name = 0;
-					let block = neighbour_chunks[$axis.face_pos()].blocks[pos];
-					chunk_padding[$axis.face_pos()][$a][$b] = block;
-				}
-			}
-			)*
-		};
-	}
-	neighbours! {
-		(y, z) in (Axis::X, x) => [0, y as u8, z as u8];
-		(x, z) in (Axis::Y, y) => [x as u8, 0, z as u8];
-		(x, y) in (Axis::Z, z) => [x as u8, y as u8, 0];
-	}
-	chunk_padding
 }
 
 /// Will generate 3 bitmasks for this chunk, one for each axis.
@@ -214,9 +399,7 @@ async fn get_blocks_bitmask(
 	// fill in the current chunk
 	for (pos, block) in chunk.blocks.iter_xyz() {
 		yield_now().await;
-
-		let BlockInChunkPos { x, y, z } = pos;
-		let [x, y, z] = [x as usize, y as usize, z as usize];
+		let [x, y, z] = [pos.x(), pos.y(), pos.z()];
 		if block_models[&block.id].should_cull {
 			blocks_mask[Axis::X][y][z] |= 1 << (x + 1);
 			blocks_mask[Axis::Y][x][z] |= 1 << (y + 1);
@@ -259,43 +442,43 @@ async fn get_blocks_bitmask(
 	(blocks_mask, non_culled_mask)
 }
 
-fn bitmask_pos_to_world(axis: Axis, i: usize, j: usize, k: u32) -> BlockInChunkPos {
-	// i and j are the two coordinates that are normally looped over.
-	// i represent an axis lower than j.
-	// k represent the axis along the bitmask itself (along `axis`).
-
-	let [i, j, k] = [i as u8, j as u8, k as u8];
-
+fn bitmask_pos_to_world(axis: Axis, [i, j, k]: [usize; 3]) -> Option<BlockInChunkPos> {
 	let [x, y, z] = match axis {
-		Axis::X => [k, i, j],
-		Axis::Y => [i, k, j],
-		Axis::Z => [i, j, k],
+		Axis::X => [i, j, k],
+		Axis::Y => [j, i, k],
+		// z axis doesnt follow pattern, because (input) i and j are swapped.
+		// the correct order would be [j, k, i] without the swap.
+		Axis::Z => [k, j, i],
 	};
 
-	BlockInChunkPos { x, y, z }
+	BlockInChunkPos::try_new(x, y, z)
 }
 
-fn create_face_mesh(info: BlockFaceInfo) -> Mesh {
-	let BlockFaceInfo { face, data, pos } = info;
-
+fn create_face_mesh(face: Face, data: BlockFaceData) -> Mesh {
 	let mut cube_mesh = Mesh::new(
 		PrimitiveTopology::TriangleList,
 		RenderAssetUsages::default(),
 	);
 
-	let positions = get_face_positions(face, data.min, data.max, pos);
+	let positions = get_face_positions(face, data.min, data.max);
 	cube_mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
 
 	// in the future block models may define different uvs, this is temporary
-	let Rect { min, max } = Rect::from_corners(Vec2::ZERO, Vec2::ONE);
-	let Vec2 { x: x0, y: y0 } = min;
-	let Vec2 { x: x1, y: y1 } = max;
+	let Vec2 { x: x0, y: y0 } = Vec2::ZERO;
+	let Vec2 { x: x1, y: y1 } = match face.axis() {
+		Axis::X => Vec2::new(data.max.z - data.min.z, data.max.y - data.min.y),
+		Axis::Y => Vec2::new(data.max.x - data.min.x, data.max.z - data.min.z),
+		Axis::Z => Vec2::new(data.max.x - data.min.x, data.max.y - data.min.y),
+	};
 	let uvs = vec![[x0, y0], [x0, y1], [x1, y1], [x1, y0]];
 	cube_mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
 
-	// all 4 vertices must have the same voxel index, since they belong to the same face
-	let voxel_indices = vec![data.side as u32; 4];
-	cube_mesh.insert_attribute(ATTRIBUTE_BASE_VOXEL_INDICES, voxel_indices);
+	// all vertices use the same starting value and width.
+	// the offset comes from the uv position.
+	let start_texture_indices = vec![data.start_texture_index; 4];
+	cube_mesh.insert_attribute(ATTRIBUTE_START_TEXTURE_INDEX, start_texture_indices);
+	let rect_widths = vec![data.rect_width; 4];
+	cube_mesh.insert_attribute(ATTRIBUTE_RECT_WIDTH, rect_widths);
 
 	// since we are constructing a single face, we already
 	// know the exact indeces for the 2 triangles
@@ -305,7 +488,7 @@ fn create_face_mesh(info: BlockFaceInfo) -> Mesh {
 	cube_mesh
 }
 
-fn get_face_positions(face: Face, min: Vec3, max: Vec3, pos: BlockInChunkPos) -> Vec<[f32; 3]> {
+fn get_face_positions(face: Face, min: Vec3, max: Vec3) -> Vec<[f32; 3]> {
 	macro_rules! min_max {
 		($([$x:tt, $y:tt, $z:tt]),* $(,)?) => {{
 			vec![$([
@@ -325,21 +508,12 @@ fn get_face_positions(face: Face, min: Vec3, max: Vec3, pos: BlockInChunkPos) ->
 		};
 	}
 
-	let mut positions = match face {
+	match face {
 		Face::Right => min_max!([1, 1, 1], [1, 0, 1], [1, 0, 0], [1, 1, 0]),
 		Face::Left => min_max!([0, 1, 0], [0, 0, 0], [0, 0, 1], [0, 1, 1]),
 		Face::Up => min_max!([0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]),
 		Face::Down => min_max!([0, 0, 1], [0, 0, 0], [1, 0, 0], [1, 0, 1]),
 		Face::Back => min_max!([0, 1, 1], [0, 0, 1], [1, 0, 1], [1, 1, 1]),
 		Face::Forward => min_max!([1, 1, 0], [1, 0, 0], [0, 0, 0], [0, 1, 0]),
-	};
-
-	let offset = Vec3::from(pos);
-	for [x, y, z] in &mut positions {
-		*x += offset.x;
-		*y += offset.y;
-		*z += offset.z;
 	}
-
-	positions
 }

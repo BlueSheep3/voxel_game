@@ -131,6 +131,13 @@ impl<T> FaceMap<T> {
 			.zip(&self.0)
 	}
 
+	pub fn iter_mut_face(&mut self) -> impl Iterator<Item = (Face, &mut T)> {
+		use Face as F;
+		[F::Right, F::Left, F::Up, F::Down, F::Back, F::Forward]
+			.into_iter()
+			.zip(&mut self.0)
+	}
+
 	pub fn map<U>(self, f: impl FnMut(T) -> U) -> FaceMap<U> {
 		FaceMap(self.0.map(f))
 	}

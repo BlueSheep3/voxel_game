@@ -1,5 +1,5 @@
 // mod block_model_asset;
-mod chunk_material;
+pub mod chunk_material;
 mod wireframe_rendering;
 
 use self::{chunk_material::ChunkMaterialPlugin, wireframe_rendering::WireframeRenderingPlugin};
@@ -13,8 +13,6 @@ use image::{imageops, DynamicImage};
 use serde::Deserialize;
 use std::{collections::HashMap, ffi::OsString, fs};
 use thiserror::Error;
-
-pub use self::chunk_material::{ChunkMaterial, ATTRIBUTE_BASE_VOXEL_INDICES};
 
 pub struct BlockModelPlugin;
 
@@ -47,6 +45,7 @@ pub struct GlobalTexture {
 #[derive(Asset, TypePath, Debug, Clone, Deserialize)]
 pub struct BlockModelAsset<Side: TypePath + Send + Sync> {
 	// TODO cull individual faces
+	// currently assumes that any culled block is a full block
 	pub should_cull: bool,
 	/// all faces of this model, mapped by what direction they face towards
 	pub faces: FaceMap<Vec<BlockFaceDataAsset<Side>>>,
@@ -62,6 +61,7 @@ pub struct BlockFaceDataAsset<Side: TypePath + Send + Sync> {
 #[derive(Debug, Clone)]
 pub struct BlockModel<Side> {
 	// TODO cull individual faces
+	// currently assumes that any culled block is a full block
 	pub should_cull: bool,
 	/// all faces of this model, mapped by what direction they face towards
 	pub faces: FaceMap<Vec<BlockFaceData<Side>>>,

@@ -29,11 +29,13 @@ impl BlockPos {
 	}
 
 	pub fn to_block_in_chunk_pos(self) -> BlockInChunkPos {
-		BlockInChunkPos::new(
-			self.x.rem_euclid(CHUNK_LENGTH as i32) as u8,
-			self.y.rem_euclid(CHUNK_LENGTH as i32) as u8,
-			self.z.rem_euclid(CHUNK_LENGTH as i32) as u8,
-		)
+		BlockInChunkPos::try_from(IVec3::new(
+			self.x.rem_euclid(CHUNK_LENGTH as i32),
+			self.y.rem_euclid(CHUNK_LENGTH as i32),
+			self.z.rem_euclid(CHUNK_LENGTH as i32),
+		))
+		// `rem_euclid` guarantees that all coordinates are `0 <= x < CHUNK_LENGTH`
+		.unwrap()
 	}
 
 	/// gets all block positions that touch this block, meaning diagonals are not counted

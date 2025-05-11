@@ -1,7 +1,6 @@
 use crate::{
 	entity::{movement::Velocity, player::Player},
 	pos::Vec3Utils,
-	GlobalState,
 };
 use bevy::prelude::*;
 use std::{collections::VecDeque, f32::consts::TAU};
@@ -10,11 +9,8 @@ pub struct DebugInfoPlugin;
 
 impl Plugin for DebugInfoPlugin {
 	fn build(&self, app: &mut App) {
-		app.add_sub_state::<DebugInfoEnabled>()
-			.add_systems(
-				Update,
-				try_toggle_debug_info.run_if(in_state(GlobalState::InWorld)),
-			)
+		app.init_state::<DebugInfoEnabled>()
+			.add_systems(Update, try_toggle_debug_info)
 			.add_systems(OnEnter(DebugInfoEnabled(true)), spawn_debug_info_text)
 			.add_systems(OnExit(DebugInfoEnabled(true)), despawn_debug_info_text)
 			.add_systems(
@@ -27,8 +23,7 @@ impl Plugin for DebugInfoPlugin {
 #[derive(Component)]
 struct DebugInfoText;
 
-#[derive(SubStates, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
-#[source(GlobalState = GlobalState::InWorld)]
+#[derive(States, Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 struct DebugInfoEnabled(bool);
 
 fn try_toggle_debug_info(

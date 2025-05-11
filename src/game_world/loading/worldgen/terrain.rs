@@ -4,6 +4,7 @@ use crate::{
 	game_world::chunk::{BlockArray, Chunk, GenerationStage, IsLoaded, CHUNK_LENGTH},
 	pos::{BlockInChunkPos, ChunkPos},
 };
+use bevy::math::IVec3;
 use noise::{NoiseFn, Perlin};
 
 /// will create a new chunk with the [`Terrain`](GenerationStage::Terrain) GenerationStage.
@@ -17,17 +18,17 @@ pub fn generate_chunk_terrain(chunk_pos: ChunkPos, seed: Seed, loaded: IsLoaded)
 
 	let perlin = Perlin::new(seed);
 
-	for x in 0..CHUNK_LENGTH as u8 {
-		for z in 0..CHUNK_LENGTH as u8 {
+	for x in 0..CHUNK_LENGTH as i32 {
+		for z in 0..CHUNK_LENGTH as i32 {
 			let world_pos = chunk_pos.to_block_pos();
-			let x_block = x as i32 + world_pos.x;
-			let z_block = z as i32 + world_pos.z;
+			let x_block = x + world_pos.x;
+			let z_block = z + world_pos.z;
 			let y_block = get_height_at(x_block, z_block, &perlin);
 			let y_in_chunk = y_block - world_pos.y;
-			let clamped = (y_in_chunk + 1).clamp(0, CHUNK_LENGTH as i32) as u8;
+			let clamped = (y_in_chunk + 1).clamp(0, CHUNK_LENGTH as i32);
 
 			for y in 0..clamped {
-				let diff = y as i32 - y_in_chunk;
+				let diff = y - y_in_chunk;
 				let mut block = match diff {
 					..-3 => Stone::BLOCK,
 					-3..0 => Dirt::BLOCK,
@@ -35,13 +36,14 @@ pub fn generate_chunk_terrain(chunk_pos: ChunkPos, seed: Seed, loaded: IsLoaded)
 					// should be unreachable because y doesnt go this high
 					1.. => continue,
 				};
-				let block_pos = [x_block, y as i32 + world_pos.y, z_block];
+				let block_pos = [x_block, y + world_pos.y, z_block];
 				if is_cave_air(block_pos, &perlin) {
 					block = Air::BLOCK;
 				} else if block == Stone::BLOCK && is_random_cobblestone(block_pos, &perlin) {
 					block = Cobblestone::BLOCK;
 				}
-				let pos = BlockInChunkPos::new(x, y, z);
+				// all coordinates come from loops with bounds up to CHUNK_LENGTH
+				let pos = BlockInChunkPos::try_from(IVec3::new(x, y, z)).unwrap();
 				chunk.blocks[pos] = block;
 			}
 		}
